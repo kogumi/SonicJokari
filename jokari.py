@@ -1349,7 +1349,71 @@ class Engine:
         self.proc, self.out = None, ""
         self.lock = threading.Lock()
 
+    # --- serveur son (scsynth) : on s'assure qu'il ne reste jamais un ancien serveur bloqué ---
+    @staticmethod
+    def _scsynth(ppid=None):
+        """PID des scsynth sur le port 57110 (optionnellement : enfants de ppid). Mac / Linux seulement."""
+        if sys.platform == "win32":
+            return []
+        try:
+            out = subprocess.run(["ps", "-axo", "pid=,ppid=,command="], capture_output=True, text=True, timeout=3).stdout
+        except Exception:
+            return []
+        pids = []
+        for line in out.splitlines():
+            parts = line.split(None, 2)
+            if len(parts) == 3 and "scsynth" in parts[2] and "57110" in parts[2]:
+                if ppid is None or int(parts[1]) == ppid:
+                    pids.append(int(parts[0]))
+        return pids
+
+    @staticmethod
+    def _port_busy():
+        t = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            t.bind(("127.0.0.1", 57110))
+            return False
+        except OSError:
+            return True
+        finally:
+            t.close()
+
+    @staticmethod
+    def _kill(pids):
+        for pid in pids:
+            for sig in (signal.SIGTERM, signal.SIGKILL):
+                try:
+                    os.kill(pid, sig)
+                except OSError:
+                    break
+                for _ in range(10):
+                    time.sleep(0.1)
+                    try:
+                        os.kill(pid, 0)
+                    except OSError:
+                        break
+                else:
+                    continue
+                break
+
+    def _clear_port(self):
+        """Avant de démarrer : si un ancien serveur son occupe encore le port, on l'arrête."""
+        if not self._port_busy():
+            return
+        osc.OscClient("127.0.0.1", 57110).send("/quit")
+        for _ in range(15):
+            time.sleep(0.1)
+            if not self._port_busy():
+                return
+        orphans = self._scsynth(ppid=1)
+        if orphans:
+            print(f"[son] ancien serveur son bloqué (pid {', '.join(map(str, orphans))}) : arrêt")
+            self._kill(orphans)
+        if self._port_busy():
+            print("[son] attention : le port 57110 est encore occupé (un autre SuperCollider est ouvert ?)")
+
     def _start(self):
+        self._clear_port()
         out, inp, warn = audio.choose(self.cfg["general"]["sortie_audio"])
         self.out = out
         if warn:
@@ -1358,12 +1422,17 @@ class Engine:
 
     def _stop(self):
         if self.proc:
-            osc.OscClient("127.0.0.1", 57110).send("/quit")   # arrête aussi le serveur son (scsynth)
+            children = self._scsynth(ppid=self.proc.pid)        # le serveur son lancé par ce sclang
+            osc.OscClient("127.0.0.1", 57110).send("/quit")    # arrêt normal du serveur son
             self.proc.terminate()
             try:
                 self.proc.wait(timeout=3)
             except Exception:
                 self.proc.kill()
+            # un serveur attaché à un périphérique qui a disparu (enceinte Bluetooth éteinte)
+            # peut ne pas répondre : on le force
+            time.sleep(0.3)
+            self._kill([p for p in children if p in self._scsynth()])
         self.proc = None
 
     def start(self):
@@ -1376,8 +1445,10 @@ class Engine:
         with self.lock:
             self._stop()
 
-    def restart(self, why):
+    def restart(self, why, only_if_changed=False):
         with self.lock:
+            if only_if_changed and audio.choose(self.cfg["general"]["sortie_audio"])[0] == self.out:
+                return                                   # déjà relancé entre-temps sur la bonne sortie
             print(f"[son] relance de SuperCollider ({why})…")
             self.sound.ready = False
             self._stop()
@@ -1392,11 +1463,11 @@ class Engine:
     def _watch(self):
         while True:
             time.sleep(3)
-            if not self.proc:
+            if not self.proc or self.lock.locked():      # une relance est déjà en cours
                 continue
             out, _, _ = audio.choose(self.cfg["general"]["sortie_audio"])
             if out and out != self.out:
-                self.restart(f"sortie audio : {out}")
+                self.restart(f"sortie audio : {out}", only_if_changed=True)
 
 
 class App:
