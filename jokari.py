@@ -536,6 +536,7 @@ class Game:
         self.last_force = (0, 0, 0.0, 0.0)    # (compteur, joueur, force, pic en g) de la dernière frappe
         self.hits = []                        # dernières frappes (page de réglages)
         self.demo = None                      # vol de balle de test (page de réglages)
+        self.demo_match = 0                   # démo de jeu : nombre de joueurs virtuels (0 = non)
         self.order = []
         self.energy = 0.5
         self.players_key = None
@@ -594,7 +595,7 @@ class Game:
             self.later(0.4, lambda: self.sound.say(txt))
             if self.server in self.bot_slots:      # le bot attend la fin de l'annonce pour servir
                 self.bot_plan = ("service", time.monotonic() + 2.0 + 0.9 * self.n + random.uniform(0, 1.0))
-        self.mgr.rumble(self.server, 150)
+        self.rumble(self.server, 150)
 
     def to_lobby(self):
         self.timers.clear()
@@ -610,11 +611,15 @@ class Game:
 
     def name(self, slot, cap=False):
         """Prénom du joueur (saisi sur son téléphone), « l'adversaire virtuel », ou « joueur N »."""
-        r = self.mgr.remotes.get(slot)
+        r = None if self.demo_match else self.mgr.remotes.get(slot)
         n = (getattr(r, "name", "") or "").strip()
         if not n:
             n = "l'adversaire virtuel" if slot in self.bot_slots and len(self.bot_slots) == 1 else f"joueur {slot + 1}"
         return n[0].upper() + n[1:] if cap else n
+
+    def rumble(self, slot, ms):
+        if not self.demo_match:                      # démo de jeu : les raquettes ne vibrent pas
+            self.mgr.rumble(slot, ms)
 
     def combo_level(self):
         C = self.cfg["combo"]
@@ -667,7 +672,7 @@ class Game:
         self.hitter = slot
         self.receiver = (slot + 1) % max(self.n, 1)
         self.apex_done = self.in_window = False
-        r = self.mgr.remotes.get(slot)
+        r = None if self.demo_match else self.mgr.remotes.get(slot)
         peak = getattr(getattr(r, "det", None), "last_peak", 0.0)
         self.last_force = (self.last_force[0] + 1, slot, force, peak)
         self.hits = (self.hits + [{"nom": self.name(slot, True), "joueur": slot + 1, "force": round(force, 2),
@@ -677,18 +682,18 @@ class Game:
             self.perfect = (self.perfect[0] + 1, slot)
             self.set_state("vol", f"Frappe parfaite ! {self.name(slot, True)} → {self.name(self.receiver)}")
             self.ev("parfait", pan=self.pan(slot), force=1.0)
-            self.mgr.rumble(slot, vib * 2.5)
+            self.rumble(slot, vib * 2.5)
         else:
             combo = f" — combo {int(self.combo)}" if C["actif"] and self.combo >= 2 else ""
             self.set_state("vol", f"{self.name(slot, True)} frappe → {self.name(self.receiver)}{combo}")
-            self.mgr.rumble(slot, vib)
+            self.rumble(slot, vib)
         self.ev("impact", pan=self.pan(slot), force=f, player=slot)
 
     def fault(self, slot, reason):
         self.d = self.v = 0.0
         self.combo = 0.0
         self.ev("faute", pan=self.pan(slot))
-        self.mgr.rumble(slot, self.cfg["manette"]["vibreur_faute"])
+        self.rumble(slot, self.cfg["manette"]["vibreur_faute"])
         if self.n <= 1:
             msg = f"Raté ! Série : {self.rally} (record {self.best_rally})"
             self.set_state("pause", msg)
@@ -713,7 +718,7 @@ class Game:
 
     def win(self, winner):
         self.ev("victoire", pan=self.pan(winner))
-        self.mgr.rumble(winner, 800)
+        self.rumble(winner, 800)
         who = self.name(winner)                    # le nom du gagnant, par-dessus la musique de victoire
         bravo = f"{who} gagne !" if who.startswith(("l'", "joueur")) else f"Bravo {who}, tu gagnes !"
         self.later(0.9, lambda: self.sound.say(bravo))
@@ -726,7 +731,7 @@ class Game:
     def trinque(self, slots):
         self.ev("trinque", pan=0.0, force=0.5)
         for s in slots:
-            self.mgr.rumble(s, 200)
+            self.rumble(s, 200)
         self.later(0.7, self.new_game)
         self.set_state("pause", "Tchin ! La partie commence…")
 
@@ -795,9 +800,13 @@ class Game:
 
     # ---------- boucle ----------
     def update_players(self):
-        base = max([s + 1 for s in self.mgr.remotes] + [int(self.cfg["jeu"]["joueurs_virtuels"])])
-        n = max(base + int(self.cfg["jeu"]["adversaires_virtuels"]), 1)
-        self.bot_slots = list(range(base, n)) if self.cfg["jeu"]["adversaires_virtuels"] else []
+        if self.demo_match:                          # démo de jeu : que des joueurs virtuels
+            n = self.demo_match
+            self.bot_slots = list(range(n))
+        else:
+            base = max([s + 1 for s in self.mgr.remotes] + [int(self.cfg["jeu"]["joueurs_virtuels"])])
+            n = max(base + int(self.cfg["jeu"]["adversaires_virtuels"]), 1)
+            self.bot_slots = list(range(base, n)) if self.cfg["jeu"]["adversaires_virtuels"] else []
         if n != self.n:
             self.n = n
             self.points = (self.points + [0] * n)[:n]
@@ -806,7 +815,7 @@ class Game:
                 self.d = self.v = 0.0
                 self.set_state("service", f"{n} joueur(s) — service : {self.name(self.server)}")
         muted = frozenset(s for s, r in self.mgr.remotes.items() if hasattr(r, "take_vibration")) \
-            if self.cfg["telephone"]["sabre_sur_telephone"] else frozenset()
+            if self.cfg["telephone"]["sabre_sur_telephone"] and not self.demo_match else frozenset()
         if (n, muted) != self.players_key:          # sabre des téléphones : joué par le téléphone
             self.players_key = (n, muted)
             self.sound.players(n, [self.pan(i) for i in range(n)] + [0.0] * 8, muted)
@@ -820,6 +829,8 @@ class Game:
                     kind, slot, value = self.q.get_nowait()
                 except queue.Empty:
                     break
+                if self.demo_match and kind in ("coup", "choc", "tchin", "bouton"):
+                    continue                         # démo de jeu : les raquettes ne jouent pas
                 self.handle(kind, slot, value)
             for t in [t for t in self.timers if t[0] <= now]:
                 self.timers.remove(t)
@@ -848,6 +859,12 @@ class Game:
             self.ev("riser", pan=0.0, force=max(L, 0.3), gain=0.25 + 0.75 * max(L, 0.3), dur=2.0)
         elif t == "test_voix":
             self.sound.say(f"Point pour {self.name(0)}")
+        elif t == "test_demo":                        # démo de jeu : marche / arrêt
+            self.demo_match = 0 if self.demo_match else clamp(int(b.get("joueurs", 2)), 2, 4)
+            self.chocs.clear()
+            self.to_lobby()                            # que des bots : ils trinquent et jouent tout seuls
+            self.message = (f"Démo de jeu : {self.demo_match} joueurs virtuels" if self.demo_match
+                            else "Démo arrêtée — en attente : trinquez pour lancer")
         elif t == "test_vol" and self.state in ("attente", "fin", "service") and not self.demo:
             # un vrai vol de balle (aller, élastique ou mur, retour), sans marquer de point
             self.demo = (self.state, self.message, self.combo)
@@ -870,6 +887,9 @@ class Game:
             return
         lvl = clamp(self.cfg["jeu"]["niveau_adversaire"], 0, 1)
         force = lambda: clamp(random.gauss(0.4 + 0.4 * lvl, 0.15), 0.1, 1.0)
+        if self.demo_match:                          # démo : bon niveau, frappes de toutes les forces
+            lvl = 0.85
+            force = lambda: random.choice([random.uniform(0.02, 0.3), random.uniform(0.3, 0.7), random.uniform(0.7, 1.0)])
         plan = self.bot_plan
         if self.state == "service" and self.server in self.bot_slots:
             if plan is None or plan[0] != "service":
@@ -974,7 +994,7 @@ class Game:
         if self.v < 0 and self.d <= P["fenetre"] and not self.in_window:
             self.in_window = True
             if self.cfg["manette"]["vibreur_approche"]:
-                self.mgr.rumble(self.receiver, 40)
+                self.rumble(self.receiver, 40)
         if self.v < 0 and self.d <= -P["retard_max"] * abs(self.v):   # délai de grâce dépassé
             if self.demo:                                              # vol de test : fini, sans point
                 self.end_demo()
@@ -1040,7 +1060,7 @@ class Game:
                     "force": [self.last_force[0], self.last_force[1] + 1, round(self.last_force[2], 2),
                               round(self.last_force[3], 1)],
                     "noms": [self.name(i, True) for i in range(self.n)],
-                    "frappes": list(self.hits), "ordre": list(self.order),
+                    "frappes": list(self.hits), "ordre": list(self.order), "demo": self.demo_match,
                     "frappeur": self.hitter + 1, "dref": round(self.dref(), 2),
                     "elastique": self.cfg["physique"]["longueur_elastique"]}
 

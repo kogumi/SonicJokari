@@ -221,7 +221,13 @@ function testBox() {
     <div class="f"><label>Niveau de combo (couches, arpégiateur, riser, montée vers l'aigu)</label><input type="range" id="tCombo" min="0" max="1" step="0.05" value="0"
       oninput="tCv.textContent=this.value"><span class="v" id="tCv">0</span></div>
     <div class="row">
-      <button class="acc" onclick="tst('test_vol')">▶ Vol de balle complet</button>
+      <button class="acc" id="demoBtn" onclick="tst('test_demo')">▶ Démo de jeu</button>
+      <select id="demoN" style="flex:0 0 auto"><option value="2">2 joueurs</option><option value="3">3 joueurs</option><option value="4">4 joueurs</option></select>
+    </div>
+    <div class="small" style="margin-bottom:6px">Des joueurs virtuels jouent une vraie partie en boucle (frappes douces et fortes,
+      combos), sans les téléphones : règle les sons pendant qu'ils jouent.</div>
+    <div class="row">
+      <button onclick="tst('test_vol')">▶ Vol de balle complet</button>
       <button onclick="tst('test_riser')">▶ Riser</button>
       <button onclick="tst('test_parfait')">▶ Frappe parfaite</button>
     </div>
@@ -235,7 +241,8 @@ function testBox() {
   return box;
 }
 function tst(a, j) {
-  return act(a, { force: parseFloat($('tForce').value), combo: parseFloat($('tCombo').value), joueur: j || 1 });
+  return act(a, { force: parseFloat($('tForce').value), combo: parseFloat($('tCombo').value), joueur: j || 1,
+                  joueurs: parseInt($('demoN') ? $('demoN').value : 2) });
 }
 
 async function savePreset() { await act('preset_save', { nom: $('presetName').value }); load(); }
@@ -293,6 +300,8 @@ async function poll() {
     $('msg').textContent = s.message + (s.etat === 'vol' ? ` · ${s.distance} m` : '');
     renderPlayers(s.raquettes || [], s);
     renderHits(s.frappes || []);
+    const db = $('demoBtn');
+    if (db) { db.textContent = s.demo ? '■ Arrêter la démo (' + s.demo + ' joueurs)' : '▶ Démo de jeu'; db.className = s.demo ? '' : 'acc'; }
     if (s.joueurs !== lastN) {
       lastN = s.joueurs; const box = $('simButtons'); box.innerHTML = '';
       for (let i = 1; i <= s.joueurs; i++) {
