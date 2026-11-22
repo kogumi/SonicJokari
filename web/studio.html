@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio son — Sonic Jokari</title>
+<style>
+  :root { --bg:#111418; --card:#1b2027; --panel:#161a20; --line:#2c333d; --txt:#e8ecf1; --dim:#8d97a5; --acc:#4fd1c5; --warn:#f6ad55; --gold:#ffd34d; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui, sans-serif; background:var(--bg); color:var(--txt); font-size:14px; }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); padding:10px 16px;
+           display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; }
+  h1 { font-size:17px; margin:0; }
+  a { color:var(--acc); }
+  button, select { font:inherit; color:var(--txt); background:var(--card); border:1px solid var(--line); border-radius:8px; padding:7px 11px; cursor:pointer; }
+  button.acc { background:var(--acc); color:#08201e; border-color:var(--acc); font-weight:700; }
+  .tctl { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .tctl label { color:var(--dim); font-size:12px; }
+  .tctl input[type=range] { width:90px; accent-color:var(--acc); }
+  main { padding:12px 16px 80px; max-width:1200px; margin:auto; }
+  h2 { font-size:15px; margin:18px 0 8px; color:var(--dim); font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
+
+  /* ---- conduite : séquenceur horizontal d'un échange ---- */
+  .conduite { background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; position:relative; }
+  .lane, .ruler { display:grid; grid-template-columns: var(--lw, 200px) 1fr; border-bottom:1px solid var(--line); min-height:34px; }
+  .lane:last-child { border-bottom:none; }
+  .lane .nm { padding:8px 10px; border-right:1px solid var(--line); cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lane.sel .nm { background:#203533; color:var(--acc); font-weight:700; }
+  .lane:hover .nm { background:#1e242c; }
+  .trk { position:relative; cursor:pointer; }
+  .blk { position:absolute; top:7px; bottom:7px; border-radius:6px; background:#2b5450; border:1px solid var(--acc); min-width:8px; }
+  .lane.sel .blk { background:var(--acc); }
+  .blk.on { box-shadow:0 0 0 3px var(--gold); }
+  .ruler .nm { padding:6px 10px; color:var(--dim); font-size:12px; border-right:1px solid var(--line); }
+  .ruler .trk { cursor:default; height:30px; }
+  .ruler .tick { position:absolute; top:0; bottom:0; border-left:1px dashed var(--line); padding:7px 0 0 4px; font-size:11px; color:var(--dim); white-space:nowrap; }
+  #playhead { position:absolute; top:0; bottom:0; width:2px; background:var(--gold); pointer-events:none; display:none; box-shadow:0 0 8px var(--gold); }
+
+  /* ---- éditeur ---- */
+  .editor { margin-top:14px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .editor h3 { margin:0 0 4px; font-size:18px; }
+  .editor .hint { color:var(--dim); font-size:12px; margin-bottom:10px; }
+  .modules { display:flex; flex-wrap:wrap; gap:12px; }
+  .module { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px 12px; }
+  .module h4 { margin:0 0 8px; font-size:12px; color:var(--acc); text-transform:uppercase; letter-spacing:.08em; }
+  .knobs { display:flex; flex-wrap:wrap; gap:12px; }
+  .knob { width:78px; text-align:center; user-select:none; touch-action:none; }
+  .knob svg { width:54px; height:54px; cursor:ns-resize; display:block; margin:auto; }
+  .knob .kv { font-variant-numeric:tabular-nums; font-size:12px; }
+  .knob .kl { font-size:11px; color:var(--dim); line-height:1.2; margin-top:2px; height:2.4em; overflow:hidden; }
+  .opt { display:flex; align-items:center; gap:8px; margin:4px 0; font-size:13px; }
+  .opt select { max-width:220px; }
+  .envs { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-top:12px; }
+  .env { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 10px; }
+  .env .eh { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--acc); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; }
+  .env .eh button { padding:2px 8px; font-size:11px; text-transform:none; letter-spacing:0; }
+  .env canvas { width:100%; height:130px; display:block; touch-action:none; cursor:crosshair; border-radius:6px; }
+  .small { font-size:12px; color:var(--dim); }
+  @media (max-width:700px) { .conduite { --lw:118px; } .lane .nm { font-size:12px; padding:8px 6px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎛️ Studio son</h1>
+  <a href="/">← Réglages</a>
+  <div class="tctl">
+    <label>Force</label><input type="range" id="tForce" min="0" max="1" step="0.05" value="0.6"><span id="tFv" class="small">0.6</span>
+    <label>Combo</label><input type="range" id="tCombo" min="0" max="1" step="0.05" value="0"><span id="tCv" class="small">0</span>
+    <button class="acc" onclick="tst('test_vol')">▶ Vol de test</button>
+    <button id="demoBtn" onclick="tst('test_demo')">▶ Démo de jeu</button>
+  </div>
+  <span class="small" id="etat"></span>
+</header>
+<main>
+  <h2>Conduite d'un échange</h2>
+  <div class="conduite" id="conduite"><div id="playhead"></div></div>
+  <div class="small" style="margin-top:6px">Clique sur une piste pour régler ses sons. La ligne dorée suit la balle pendant le vol de test ou la démo.</div>
+  <div class="editor" id="editor"></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let CFG = null, SCHEMA = [], SAMPLES = [], timers = {}, selected = 'balle', phase = null;
+
+// axe de la conduite : phase du vol (0 = frappe, 0,5 = élastique / mur, 1 = arrivée), + avant / après
+const X0 = -0.06, X1 = 1.12;
+const pct = x => ((x - X0) / (X1 - X0) * 100) + '%';
+const TICKS = [[-0.06, 'Service'], [0, 'Frappe'], [0.2, 'Aller'], [0.5, 'Élastique / mur'], [0.68, 'Retour'], [0.86, 'Fenêtre'], [1, 'Arrivée']];
+const LANES = [
+  { id: 'debut', nom: '🎾 Début (service, tchin)', blocs: [[-0.06, -0.01]], sections: ['Son : service', 'Son : trinque'] },
+  { id: 'frappe', nom: '💥 Frappe', blocs: [[0, 0.025], [0.975, 1]], sections: ['Son : impact', 'Son : parfait'], frappes: true },
+  { id: 'balle', nom: '🎛️ Synthé balle', blocs: [[0, 1]], synth: true },
+  { id: 'apex', nom: '🪢 Élastique / mur', blocs: [[0.48, 0.52]], sections: ['Son : elastique', 'Son : mur'] },
+  { id: 'retour', nom: '🌬️ Retour (souffle, octave)', blocs: [[0.5, 1]], champs: { 'Son de la balle': ['souffle_retour', 'indicatif', 'indicatif_avance', 'tension', 'tension_debut'] } },
+  { id: 'riser', nom: '📈 Riser', blocs: [[0.5, 1]], sections: ['Son : riser'], champs: { 'Son de la balle': ['riser'] } },
+  { id: 'combo', nom: '🔥 Combo (couches, montée)', blocs: [[0, 1]], sections: ['Combo (échanges enchaînés)'], champs: { 'Son de la balle': ['depart_grave', 'montee_combo'] } },
+  { id: 'arp', nom: '🎹 Arpégiateur', blocs: [[0, 1]], sections: ['Arpégiateur (entre avec le combo)'] },
+  { id: 'raquette', nom: '⚔️ Raquette (sabre, toc)', blocs: [[-0.06, 0.04], [0.92, 1.03]], sections: ['Sabres (son de chaque joueur)', 'Son des téléphones'] },
+  { id: 'fin', nom: '🏁 Fin (faute, point, victoire)', blocs: [[1.01, 1.12]], sections: ['Son : faute', 'Son : point', 'Son : victoire'] },
+];
+// le synthé de la balle, rangé comme un vrai synthé
+const SYNTH = [
+  ['Oscillateurs', ['frequence', 'desaccord', 'fm', 'grain']],
+  ['Filtre', ['filtre_pres', 'filtre_loin']],
+  ['Moteur', ['vibrato', 'tension', 'calme_doux']],
+  ['Ampli', ['volume', 'attenuation']],
+  ['Espace', ['reverb_pres', 'reverb_loin', 'doppler', 'vitesse_son']],
+  ['Force de frappe', ['hauteur_force', 'variation_force']],
+];
+// enveloppes de vol : comment chaque réglage évolue entre la frappe et l'arrivée
+const ENV = {
+  volume: { nom: 'Volume (×)', min: 0, max: 2, neutre: 1, fmt: v => '×' + v.toFixed(2) },
+  filtre: { nom: 'Filtre (octaves)', min: -3, max: 3, neutre: 0, fmt: v => (v > 0 ? '+' : '') + v.toFixed(2) + ' oct' },
+  hauteur: { nom: 'Hauteur (demi-tons)', min: -12, max: 12, neutre: 0, fmt: v => (v > 0 ? '+' : '') + v.toFixed(1) + ' dt' },
+  reverb: { nom: 'Réverb (+)', min: -0.5, max: 0.5, neutre: 0, fmt: v => (v > 0 ? '+' : '') + v.toFixed(2) },
+};
+
+async function api(url, body) {
+  const r = await fetch(url, body === undefined ? {} : { method: 'POST', body: JSON.stringify(body) });
+  return r.json();
+}
+function send(path, value) {
+  clearTimeout(timers[path]);
+  timers[path] = setTimeout(() => api('/api/config', { [path]: value }), 100);
+}
+function act(a, extra) { return api('/api/action', Object.assign({ action: a }, extra || {})); }
+function tst(a, j) { return act(a, { force: +$('tForce').value, combo: +$('tCombo').value, joueur: j || 1, joueurs: 2 }); }
+$('tForce').oninput = () => $('tFv').textContent = $('tForce').value;
+$('tCombo').oninput = () => $('tCv').textContent = $('tCombo').value;
+const get = path => path.split('.').reduce((o, k) => o[k], CFG);
+const fieldsOf = title => { const s = SCHEMA.find(x => x[0] === title); return s ? [s[1], s[2]] : [null, []]; };
+
+// ---------------- conduite ----------------
+function buildConduite() {
+  const c = $('conduite');
+  c.querySelectorAll('.lane, .ruler').forEach(e => e.remove());
+  const ruler = document.createElement('div'); ruler.className = 'ruler';
+  ruler.innerHTML = '<div class="nm">phase du vol →</div><div class="trk"></div>';
+  TICKS.forEach(([x, t]) => { const k = document.createElement('div'); k.className = 'tick'; k.style.left = pct(x); k.textContent = t; ruler.lastChild.appendChild(k); });
+  c.appendChild(ruler);
+  LANES.forEach(L => {
+    const row = document.createElement('div'); row.className = 'lane' + (L.id === selected ? ' sel' : ''); row.dataset.id = L.id;
+    row.innerHTML = `<div class="nm" title="${L.nom}">${L.nom}</div><div class="trk"></div>`;
+    L.blocs.forEach(([a, b]) => { const k = document.createElement('div'); k.className = 'blk'; k.dataset.a = a; k.dataset.b = b;
+      k.style.left = pct(a); k.style.width = `calc(${pct(b)} - ${pct(a)})`; row.lastChild.appendChild(k); });
+    row.onclick = () => { selected = L.id; buildConduite(); buildEditor(); };
+    c.appendChild(row);
+  });
+}
+
+// ---------------- potentiomètres ----------------
+function knob(path, f) {
+  const [, label, min, max, step] = f;
+  const box = document.createElement('div'); box.className = 'knob';
+  box.innerHTML = `<svg viewBox="0 0 54 54"><circle cx="27" cy="27" r="22" fill="#11151a" stroke="#2c333d" stroke-width="2"/>
+    <path class="arc" fill="none" stroke="var(--acc)" stroke-width="4" stroke-linecap="round"/>
+    <line class="ptr" x1="27" y1="27" x2="27" y2="9" stroke="var(--txt)" stroke-width="3" stroke-linecap="round"/></svg>
+    <div class="kv"></div><div class="kl">${label}</div>`;
+  let val = get(path);
+  const draw = () => {
+    const t = (val - min) / (max - min), ang = -135 + 270 * t, r = 22, rad = a => (a - 90) * Math.PI / 180;
+    const p = a => [27 + r * Math.cos(rad(a)), 27 + r * Math.sin(rad(a))];
+    const [x0, y0] = p(-135), [x1, y1] = p(ang);
+    box.querySelector('.arc').setAttribute('d', `M${x0},${y0} A${r},${r} 0 ${ang + 135 > 180 ? 1 : 0} 1 ${x1},${y1}`);
+    box.querySelector('.ptr').setAttribute('transform', `rotate(${ang} 27 27)`);
+    box.querySelector('.kv').textContent = +val.toFixed(3);
+  };
+  const svg = box.querySelector('svg'); let y0 = 0, v0 = 0;
+  svg.onpointerdown = e => { svg.setPointerCapture(e.pointerId); y0 = e.clientY; v0 = val; };
+  svg.onpointermove = e => {
+    if (!svg.hasPointerCapture(e.pointerId)) return;
+    const fine = e.shiftKey ? 0.2 : 1;                            // Maj : réglage fin
+    let v = v0 + (y0 - e.clientY) / 150 * (max - min) * fine;
+    v = Math.min(max, Math.max(min, Math.round(v / step) * step));
+    if (v !== val) { val = v; draw(); send(path, v); }
+  };
+  svg.onwheel = e => { e.preventDefault(); val = Math.min(max, Math.max(min, +(val - Math.sign(e.deltaY) * step).toFixed(6))); draw(); send(path, val); };
+  draw();
+  return box;
+}
+function option(path, f) {
+  const d = document.createElement('div'); d.className = 'opt'; const val = get(path);
+  if (f[2] === 'bool') {
+    d.innerHTML = `<input type="checkbox" ${val ? 'checked' : ''}> ${f[1]}`;
+    d.firstChild.onchange = e => send(path, e.target.checked);
+  } else if (f[2] === 'sample') {
+    const s = document.createElement('select'); s.add(new Option('(synthé intégré)', ''));
+    SAMPLES.forEach(n => s.add(new Option(n, n, false, n === val))); s.onchange = () => send(path, s.value);
+    d.append(f[1] + ' : ', s);
+  } else if (f[2] === 'choix') {
+    const s = document.createElement('select'); f[3].forEach(([v, t]) => s.add(new Option(t, v, false, v === val)));
+    s.onchange = () => send(path, s.value); d.append(f[1] + ' : ', s);
+  } else return null;
+  return d;
+}
+function module(title, path, fields) {
+  const m = document.createElement('div'); m.className = 'module';
+  m.innerHTML = `<h4>${title}</h4>`;
+  const ks = document.createElement('div'); ks.className = 'knobs';
+  fields.forEach(f => {
+    const p = path + '.' + f[0];
+    if (typeof f[2] === 'number') ks.appendChild(knob(p, f)); else { const o = option(p, f); if (o) m.appendChild(o); }
+  });
+  if (ks.children.length) m.appendChild(ks);
+  if (path.startsWith('sons.')) { const b = document.createElement('button'); b.textContent = '▶ Écouter'; b.style.marginTop = '8px';
+    b.onclick = () => act('test:' + path.slice(5)); m.appendChild(b); }
+  return m;
+}
+
+// ---------------- enveloppes de vol ----------------
+function envEditor(key) {
+  const E = ENV[key], path = 'enveloppes.' + key;
+  const box = document.createElement('div'); box.className = 'env';
+  box.innerHTML = `<div class="eh"><span>${E.nom}</span><button>À plat</button></div><canvas></canvas>`;
+  const cv = box.querySelector('canvas'); let pts = get(path).map(p => p.slice()), drag = -1;
+  const W = () => cv.clientWidth, H = () => cv.clientHeight;
+  const toXY = ([x, y]) => [x * W(), (1 - (y - E.min) / (E.max - E.min)) * H()];
+  const fromXY = (px, py) => [Math.min(1, Math.max(0, px / W())), Math.min(E.max, Math.max(E.min, E.max - py / H() * (E.max - E.min)))];
+  const save = () => { CFG.enveloppes[key] = pts.map(p => [+p[0].toFixed(3), +p[1].toFixed(3)]); send(path, CFG.enveloppes[key]); };
+  box.draw = () => {
+    const dpr = devicePixelRatio || 1; cv.width = W() * dpr; cv.height = H() * dpr;
+    const g = cv.getContext('2d'); g.scale(dpr, dpr); g.fillStyle = '#11151a'; g.fillRect(0, 0, W(), H());
+    g.strokeStyle = '#2c333d'; g.setLineDash([3, 4]);
+    [0.5, 0.86].forEach(x => { g.beginPath(); g.moveTo(x * W(), 0); g.lineTo(x * W(), H()); g.stroke(); });
+    const yn = toXY([0, E.neutre])[1]; g.beginPath(); g.moveTo(0, yn); g.lineTo(W(), yn); g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#8d97a5'; g.font = '10px system-ui';
+    g.fillText('frappe', 3, H() - 4); g.fillText('élastique / mur', 0.5 * W() + 3, H() - 4); g.fillText('arrivée', W() - 38, H() - 4);
+    g.strokeStyle = '#4fd1c5'; g.lineWidth = 2; g.beginPath();
+    pts.forEach((p, i) => { const [x, y] = toXY(p); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+    pts.forEach((p, i) => { const [x, y] = toXY(p); g.fillStyle = i === drag ? '#ffd34d' : '#e8ecf1'; g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); });
+    if (phase !== null) { g.strokeStyle = '#ffd34d'; g.lineWidth = 2; g.beginPath(); g.moveTo(phase * W(), 0); g.lineTo(phase * W(), H()); g.stroke(); }
+    const last = drag >= 0 ? pts[drag] : null;
+    if (last) { g.fillStyle = '#ffd34d'; g.fillText(E.fmt(last[1]), 6, 12); }
+  };
+  const near = (px, py) => pts.findIndex(p => { const [x, y] = toXY(p); return Math.hypot(x - px, y - py) < 10; });
+  const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  cv.onpointerdown = e => {
+    const [px, py] = pos(e); let i = near(px, py);
+    if (i < 0) { const p = fromXY(px, py); pts.push(p); pts.sort((a, b) => a[0] - b[0]); i = pts.indexOf(p); }   // clic : ajoute un point
+    drag = i; cv.setPointerCapture(e.pointerId); box.draw();
+  };
+  cv.onpointermove = e => {
+    if (drag < 0) return;
+    const [px, py] = pos(e); let [x, y] = fromXY(px, py);
+    if (drag === 0) x = 0; else if (drag === pts.length - 1) x = 1;
+    else x = Math.min(pts[drag + 1][0] - 0.01, Math.max(pts[drag - 1][0] + 0.01, x));
+    pts[drag] = [x, y]; box.draw();
+  };
+  cv.onpointerup = () => { if (drag >= 0) { drag = -1; save(); box.draw(); } };
+  cv.ondblclick = e => {                                           // double-clic sur un point : le retire
+    const i = near(...pos(e)); if (i > 0 && i < pts.length - 1) { pts.splice(i, 1); save(); box.draw(); }
+  };
+  box.querySelector('button').onclick = () => { pts = [[0, E.neutre], [1, E.neutre]]; save(); box.draw(); };
+  return box;
+}
+
+// ---------------- éditeur de la piste choisie ----------------
+let envBoxes = [];
+function buildEditor() {
+  const L = LANES.find(l => l.id === selected), ed = $('editor'); ed.innerHTML = ''; envBoxes = [];
+  ed.innerHTML = `<h3>${L.nom}</h3>`;
+  const mods = document.createElement('div'); mods.className = 'modules';
+  if (L.synth) {
+    ed.insertAdjacentHTML('beforeend', '<div class="hint">Tourne les boutons (glisser vers le haut / le bas, molette ; Maj = réglage fin). Lance un vol de test pour entendre le résultat.</div>');
+    const [path, fields] = fieldsOf('Son de la balle');
+    SYNTH.forEach(([t, keys]) => mods.appendChild(module(t, path, fields.filter(f => keys.includes(f[0])))));
+    ed.appendChild(mods);
+    ed.insertAdjacentHTML('beforeend', '<h2>Enveloppes de vol</h2><div class="hint">Comment le son évolue entre la frappe et l\'arrivée. Clique pour ajouter un point, glisse pour le déplacer, double-clic pour le retirer. Ligne pointillée = son d\'origine.</div>');
+    const envs = document.createElement('div'); envs.className = 'envs';
+    Object.keys(ENV).forEach(k => { const b = envEditor(k); envBoxes.push(b); envs.appendChild(b); });
+    ed.appendChild(envs); envBoxes.forEach(b => b.draw());
+    return;
+  }
+  if (L.frappes) {
+    const m = document.createElement('div'); m.className = 'module'; m.innerHTML = '<h4>Écouter la frappe de chaque joueur</h4>';
+    [1, 2, 3, 4].forEach(j => { const b = document.createElement('button'); b.textContent = '▶ J' + j; b.style.marginRight = '6px'; b.onclick = () => tst('test_frappe', j); m.appendChild(b); });
+    mods.appendChild(m);
+  }
+  (L.sections || []).forEach(t => { const [path, fields] = fieldsOf(t); if (path) mods.appendChild(module(t.replace(/^Son : /, 'Son : '), path, fields)); });
+  Object.entries(L.champs || {}).forEach(([t, keys]) => { const [path, fields] = fieldsOf(t); if (path) mods.appendChild(module(t, path, fields.filter(f => keys.includes(f[0])))); });
+  if (selected === 'riser') { const b = document.createElement('button'); b.textContent = '▶ Écouter le riser'; b.onclick = () => tst('test_riser'); mods.appendChild(b); }
+  ed.appendChild(mods);
+}
+
+// ---------------- suivi en direct ----------------
+async function poll() {
+  try {
+    const s = await (await fetch('/api/state')).json();
+    phase = s.phase;
+    const ph = $('playhead');
+    if (phase !== null && phase !== undefined) {
+      const lw = parseFloat(getComputedStyle($('conduite')).getPropertyValue('--lw')) || 200, tw = $('conduite').clientWidth - lw;
+      ph.style.display = 'block'; ph.style.left = (lw + tw * (phase - X0) / (X1 - X0)) + 'px';
+    } else ph.style.display = 'none';
+    document.querySelectorAll('.blk').forEach(k => k.classList.toggle('on', phase !== null && phase !== undefined && phase >= +k.dataset.a && phase <= +k.dataset.b));
+    envBoxes.forEach(b => b.draw());
+    $('etat').textContent = s.message;
+    $('demoBtn').textContent = s.demo ? '■ Arrêter la démo' : '▶ Démo de jeu';
+  } catch (e) {}
+  setTimeout(poll, 80);
+}
+
+(async () => {
+  const j = await api('/api/config');
+  CFG = j.config; SCHEMA = j.schema; SAMPLES = j.samples;
+  buildConduite(); buildEditor(); poll();
+})();
+addEventListener('resize', () => envBoxes.forEach(b => b.draw()));
+</script>
+</body>
+</html>

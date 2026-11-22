@@ -120,6 +120,9 @@ DEFAULTS = {
               "erratique": 1.0, "couches": 1.0, "annonce_tous": 5, "raideur_combo": 1.0},
     "reverb": {"taille": 0.85, "amorti": 0.4},
     "general": {"volume": 0.9, "voix": "fr", "sortie_audio": "", "style": ""},
+    # enveloppes de vol de la balle : points (phase 0 = frappe, 0,5 = élastique / mur, 1 = arrivée, valeur)
+    "enveloppes": {"volume": [[0, 1], [1, 1]], "filtre": [[0, 0], [1, 0]],
+                   "hauteur": [[0, 0], [1, 0]], "reverb": [[0, 0], [1, 0]]},
     "dubstep": {"wobble": 0.0},      # 0 : le wobble masquait la sensation de distance et de vitesse
     "musical": {"actif": False, "bpm": 140.0, "volume": 0.6},
     "reseau": {"wifi_nom": "", "wifi_mdp": "", "wifi_securite": "WPA", "adresse": ""},
@@ -527,6 +530,7 @@ class Game:
         self.bot_slots = []     # adversaires virtuels : derniers numéros de joueur
         self.bot_plan = None
         self.k_flight = 1.0
+        self.flight_peak = self.apex_pred = 1.0
         self.stretch_max = 0.0
         self.snap_done = False
         self.v_launch = 0.0
@@ -668,6 +672,8 @@ class Game:
         self.snap_done = False
         self.erratic = (E, random.uniform(0, 6.28), random.uniform(0, 6.28), random.uniform(0.5, 1.1))
         self.flight_t = 0.0
+        self.flight_peak = self.d
+        self.apex_pred = self.predict_apex()
         self.energy = clamp(g, 0, 1.3)              # énergie de la frappe : colore tout le vol
         self.hitter = slot
         self.receiver = (slot + 1) % max(self.n, 1)
@@ -925,6 +931,30 @@ class Game:
         else:
             self.bot_plan = None
 
+    def predict_apex(self):
+        """Distance la plus lointaine que la balle atteindra (pour la phase du vol)."""
+        P = self.cfg["physique"]
+        if self.cfg["jeu"]["mode"] == "pelote":
+            return P["mur_distance"]
+        L0, S = P["longueur_elastique"], max(P["etirement_max"], 0.1)
+        d, v = self.d, self.v
+        for _ in range(3000):
+            if v <= 0:
+                break
+            x = d - L0
+            if x > 0:
+                v -= self.k_flight * x * (1 + (x / S) ** 2) * 0.01
+            d += v * 0.01
+        return max(d, 0.5)
+
+    def phase(self):
+        """Phase du vol : 0 = frappe, 0,5 = élastique / mur, 1 = arrivée chez le joueur suivant."""
+        if self.state != "vol":
+            return None
+        if self.v > 0:
+            return 0.5 * clamp(self.d / max(self.apex_pred, 0.1), 0, 1)
+        return 1 - 0.5 * clamp(self.d / max(self.flight_peak, 0.1), 0, 1)
+
     def arrival_time(self):
         """Jokari : temps restant avant que la balle n'arrive sur le joueur (sans l'aléa erratique)."""
         P = self.cfg["physique"]
@@ -972,6 +1002,7 @@ class Game:
                 self.v *= (1 - P["frottement"] * dt)
                 self.v = min(self.v, -P["vitesse_retour_min"])
             self.d += self.v * dt
+            self.flight_peak = max(self.flight_peak, self.d)
             if self.v > 0 and self.d >= W:
                 self.d = W - (self.d - W)
                 self.v = -self.v * P["restitution"]
@@ -984,6 +1015,7 @@ class Game:
                 self.v -= self.k_flight * x * (1 + (x / S) ** 2) * dt
                 self.stretch_max = max(self.stretch_max, x)
             self.d += self.v * dt
+            self.flight_peak = max(self.flight_peak, self.d)
             if not self.apex_done and self.v <= 0:
                 self.apex_done = True
                 self.ev("elastique", pan=0.0, distance=self.d, force=clamp(self.stretch_max / S, 0, 1))
@@ -1029,6 +1061,12 @@ class Game:
             m0 = P["moment_parfait"]
             cue = clamp(1 - (tau - m0) / max(b["indicatif_avance"], 0.05), 0, 1) if tau >= m0 \
                 else clamp(1 - (m0 - tau) / 0.15, 0, 1)
+        # enveloppes de vol (Studio son) : volume ×, filtre en octaves, hauteur en demi-tons, réverb +
+        ph, Env = self.phase() or 0.0, self.cfg["enveloppes"]
+        amp *= max(envelope(Env["volume"], ph), 0)
+        cutoff = clamp(cutoff * 2 ** envelope(Env["filtre"], ph), 40, 18000)
+        ratio *= 2 ** (envelope(Env["hauteur"], ph) / 12)
+        rev = clamp(rev + envelope(Env["reverb"], ph), 0, 1)
         return (amp, ratio, cutoff, rev, tension, speed, clamp(pan, -1, 1),
                 self.combo_level() * self.cfg["combo"]["couches"], self.energy, cue,
                 (1 - dn) if self.v < 0 else 0.0)          # approche : 0 au loin -> 1 sur le joueur
@@ -1060,7 +1098,7 @@ class Game:
                     "force": [self.last_force[0], self.last_force[1] + 1, round(self.last_force[2], 2),
                               round(self.last_force[3], 1)],
                     "noms": [self.name(i, True) for i in range(self.n)],
-                    "frappes": list(self.hits), "ordre": list(self.order), "demo": self.demo_match,
+                    "frappes": list(self.hits), "ordre": list(self.order), "demo": self.demo_match, "phase": self.phase(),
                     "frappeur": self.hitter + 1, "dref": round(self.dref(), 2),
                     "elastique": self.cfg["physique"]["longueur_elastique"]}
 
@@ -1073,6 +1111,14 @@ def save_config(cfg):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2, ensure_ascii=False)
     os.replace(tmp, CONFIG_PATH)
+
+
+def envelope(points, x):
+    """Valeur d'une enveloppe (segments droits entre les points) à la phase x."""
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        if x <= x1:
+            return y0 + (y1 - y0) * clamp((x - x0) / max(x1 - x0, 1e-6), 0, 1)
+    return points[-1][1]
 
 
 def set_path(cfg, path, value):
@@ -1090,6 +1136,12 @@ def set_path(cfg, path, value):
         value = int(round(float(value)))
     elif isinstance(default, float):
         value = float(value)
+    elif isinstance(default, list):                  # enveloppe : 2 à 16 points (phase 0..1, valeur)
+        pts = sorted([clamp(float(x), 0, 1), clamp(float(y), -24, 24)] for x, y in value)[:16]
+        if len(pts) < 2:
+            raise ValueError("une enveloppe a au moins 2 points")
+        pts[0][0], pts[-1][0] = 0.0, 1.0
+        value = pts
     else:
         value = str(value)
         if k == "sample":
@@ -1226,6 +1278,8 @@ def make_handler(app):
             url = urlparse(self.path)
             if url.path in ("/", "/index.html"):
                 self._file("index.html")
+            elif url.path in ("/studio", "/studio.html"):
+                self._file("studio.html")
             elif url.path in ("/raquette", "/raquette.html"):
                 self._file("raquette.html")
             elif url.path == "/qr":

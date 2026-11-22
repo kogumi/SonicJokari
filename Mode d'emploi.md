@@ -153,6 +153,10 @@ Les réglages les plus utiles :
 | Le sabre du téléphone est trop fort / aigu | **Volume du sabre**, **Transposition** (Téléphones) |
 | Je veux mes propres sons | Section « Son : … » → choisir un sample (wav/aif/flac), ou en envoyer un |
 
+**🎛️ Studio son** (lien en haut de la page de réglages, ou `http://localhost:8080/studio`) : la **conduite** d'un échange
+(une piste par son, de la frappe à l'arrivée), le **synthé de la balle** avec ses potentiomètres, et des **enveloppes de vol**
+à dessiner (volume, filtre, hauteur, réverb entre la frappe et l'arrivée). Lance un vol de test ou la démo : la ligne dorée suit la balle.
+
 On peut **enregistrer un préréglage** (en bas de la page) et le recharger plus tard.
 
 Pour **régler le son à l'oreille** : en haut de la famille 🔊 Son, la boîte **🎧 Tester les sons** fait entendre
