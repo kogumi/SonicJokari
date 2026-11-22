@@ -1,0 +1,2 @@
+# Autorise le jeu à allumer les LEDs joueur des Wiimotes
+SUBSYSTEM=="leds", KERNEL=="*:blue:p[0-3]", RUN+="/bin/chmod 666 /sys%p/brightness"

@@ -1,0 +1,4 @@
+# Linux / Raspberry Pi : pilote natif (ou : sudo apt install python3-evdev)
+evdev; sys_platform == "linux"
+# Mac / Windows (et DolphinBar) : protocole Wiimote direct
+hidapi; sys_platform != "linux"

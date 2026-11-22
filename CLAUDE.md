@@ -1,0 +1,110 @@
+# Sonic Jokari — contexte du projet
+
+Dépôt : github.com/Kogumi/SonicJokari
+
+Résumé de la discussion de conception avec Claude (22/11/2026), pour reprendre le travail dans VS Code.
+
+## Le concept
+- Jeu de raquette **sans image**, guidé uniquement par le son. Simon en avait fait une version il y a quelques années avec des manettes Wii, il la refait.
+- Inspiré du **Jokari** (balle retenue par un élastique) et de la **pelote basque** (mur au fond). Les deux sont disponibles comme modes de jeu.
+- Se joue à 2, mais aussi seul ou jusqu'à 4 joueurs et plus. Les joueurs frappent chacun leur tour.
+- Déroulé : le joueur frappe la balle virtuelle, on l'entend partir au loin, elle revient, et le joueur suivant doit la renvoyer dans une **fenêtre de temps et de distance**. Sinon, il perd le point.
+- Ce que voulait Simon pour le son :
+  - **Effet Doppler** marqué, des sons de « voiture de science-fiction », des synthés vivants qui suivent la vitesse et la distance (dans l'esprit de Massive X) ;
+  - **pas de bip pour la fenêtre de frappe** : c'est le son lui-même qui fait le climax, avec une sensation d'accélération ;
+  - chaque manette a son propre son, façon **sabre laser**, qui réagit quand on la bouge ;
+  - **vibreurs** de la Wiimote au moment de la frappe ;
+  - les réglages des synthés doivent être modifiables, et les impacts peuvent être des **samples** avec hauteur et paramètres aléatoires ;
+  - on **trinque** avec deux Wiimotes pour lancer une partie.
+
+## Décisions techniques
+- **Wiimotes classiques**, sans MotionPlus : seulement l'accéléromètre, pas de gyroscope.
+- **Pas de patch Max.** Python pour la logique et les manettes, **SuperCollider** pour le son (choisi plutôt que Faust, pour les samples, l'aléa et les réglages en direct).
+- Une simple **sortie stéréo**, sans carte DAC multicanal. La distance passe par le volume, le filtre, la réverb et le Doppler. Les joueurs sont répartis de gauche à droite.
+- **Multiplateforme** : Raspberry Pi, Linux, Mac et Windows.
+  - Pi / Linux : pilote noyau `hid-wiimote` via **evdev**.
+  - Mac / Windows : **hidapi**, qui parle directement le protocole Wiimote (report 0x31 pour les boutons et l'accéléro, calibration lue en mémoire, LEDs, vibreur).
+  - Mac : depuis Monterey, le Bluetooth natif ne connecte plus les Wiimotes. Il faut une **DolphinBar Mayflash en mode 4**.
+  - Windows : si l'écriture vers la manette ne passe pas, le jeu bascule tout seul sur `HidD_SetOutputReport`.
+- **Trinquer** : les manettes ne se détectent pas entre elles. On repère un **choc sec** (forte variation d'un échantillon d'accéléro à l'autre) sur deux manettes **à moins de 80 ms d'écart** (réglable).
+- Une **page web de réglages** (port 8080) sert à piloter depuis un téléphone, puisque le Pi n'a pas d'écran.
+- **Téléphone comme raquette** (ajouté le 22/11/2026) : page `/raquette` en **HTTPS sur le port 8443** (obligatoire pour `devicemotion`), certificat auto-signé créé par `openssl` dans `certs/`. Le téléphone envoie l'accéléro par paquets toutes les 40 ms (POST `/api/raquette`, connexion HTTP/1.1 gardée ouverte) ; le serveur le passe dans le même `Detector` que les Wiimotes (réglages séparés, section `telephone`). Retour : numéro de joueur + vibration (`navigator.vibrate` sur Android ; sur iPhone l'écran clignote). Bouton « Tchin » = trinquer avec une tolérance d'1 s. Téléphones et Wiimotes peuvent se mélanger. Tout tourne sur un ordinateur seul, sans Pi.
+
+## Architecture des fichiers
+```
+jokari.py        jeu (états attente → service → vol → pause → fin), physique, OSC, serveur web, voix du score
+wiimote.py       Detector (coup / choc / motion) + pilotes evdev et hidapi + WiimoteManager (numéros de joueurs)
+phone.py         PhoneRemote (téléphone = manette), PhoneHub, certificat HTTPS, IP locale
+web/raquette.html  page raquette du téléphone
+audio.py         choix de la sortie audio du Mac (system_profiler), micro non Bluetooth
+kits/            kits de samples (JSON) pour les styles sonores (ex. lux_dubstep)
+osc.py           OSC minimal sans dépendance
+sc/jokari.scd    SuperCollider : \jk_ball (Doppler, moteur, tension), \jk_saber ×8, \jk_sample, sons de secours \jk_fx_*, réverb, limiteur
+web/index.html   page de réglages générée à partir de SCHEMA (dans jokari.py)
+samples/         bois_toc.wav, mur_beton.wav, tchin_verre.wav (exemples)
+presets/         préréglages enregistrés depuis la page web
+config.json      réglages courants (créé au lancement, fusionné avec DEFAULTS)
+start.sh (Linux/Pi) · « Lancer Jokari (Mac).command » · « Lancer Jokari (Windows).bat »
+raspberry-pi/    jokari.service (systemd), appairer.sh, 99-jokari-wiimote.rules
+qr.py            encodeur QR sans dépendance (vérifié avec zbarimg) ; page /qr, fichiers qr/*.png
+Mode d'emploi.md manuel pour Simon et les joueurs
+.vscode/         lancements : manettes / simulation / simulation sans SuperCollider ; tâche d'installation .venv
+```
+- Messages OSC Python → SuperCollider (port 57120) : `/ball amp ratio cutoff rev tension speed pan combo energy`, `/motion m0..`, `/saber i on freq pan`, `/play type rate amp pan cutoff rev`, `/load type chemin`, `/set cible clé val…`, `/voice chemin`. SuperCollider répond `/jokari/ready` sur le port 57130.
+- Physique Jokari (refaite le 22/11/2026, demande de Simon : « l'élastique n'est pas extensible à l'infini, plus il est envoyé loin plus il reviendra fort ») : vol libre jusqu'à `longueur_elastique` (5 m), puis ressort qui durcit : a = −k·x·(1 + (x/`etirement_max`)²), k = `raideur` × (1 + `raideur_combo`·L combo) × aléa erratique. En se relâchant, l'élastique rend de l'élan (× 1 + `rebond_elastique`·x/etirement). Résultat : frappe douce ≈ 8 m, retour après 4 s à 4,5 m/s ; frappe forte ≈ 14 m, retour après 2,3 s à 17 m/s ; le combo raccourcit encore le temps.
+- Physique Pelote : frottement plus freinage à l'aller (une balle trop faible n'atteint pas le mur et c'est une faute), rebond sur le mur avec restitution, vitesse minimale au retour.
+- Points : celui qui rate perd le point, et c'est le gagnant qui sert.
+- **Timing** (en temps, pas en distance) : tau = d/|v| = secondes avant que la balle arrive sur le joueur. Frappe possible dans la `fenetre` (4 m) et jusqu'à `retard_max` (0,25 s) après l'arrivée (Simon frappait toujours trop tard ; ça absorbe aussi la latence du téléphone). **Frappe parfaite** : q = 1 − |tau − `moment_parfait`| / `tolerance_parfait_s` (−0,03 s ± 0,12 s, calé sur l'arrivée entendue) ; vitesse × (1 + (`bonus_parfait` − 1)·q²) ; si q ≥ 0,6 : son `parfait`, vibreur renforcé, flash doré. Force max téléphone relevée à 7 g (Simon envoyait toujours trop fort).
+- **Dynamique douce / forte** : tout est interpolé en continu sur la force (pas de paliers) : force^`courbe_force` (1,4), vitesses 2,5 → 12 m/s, portée et retour via l'élastique. L'« énergie » de la frappe (9e argument OSC de `/ball`) reste tout le vol et règle volume, FM, grain, désaccord et profondeur du moteur dans \jk_ball. Impact : `volume_force` (16 dB d'écart). Vibreur proportionnel à la force. Référence de distance du son : `longueur_elastique + etirement_max`.
+- **Caractère sonore selon la force** (demande de Simon : « doux = calme, grave, pas d'accélération ; fort = plus fort, plus aigu, plus de variation ») : hauteur de la balle et de l'arpégiateur décalée de `balle.hauteur_force` × (énergie − 0,5) (±6 demi-tons) ; tension d'approche × (1 − `calme_doux` × (1 − énergie)) ; variations aléatoires (LFNoise1 sur hauteur et filtre) ∝ énergie² × `variation_force` (args `epitch`, `evar` de \jk_ball).
+- **Combo** (section `combo`) : +1 par renvoi, + `bonus_parfait` pour une parfaite, remis à 0 sur faute ou service. Niveau L = combo / `echanges_max`. Effets : vitesse × (1 + `acceleration`·L), élastique plus raide ; erratique (`erratique`·L) = raideur aléatoire, à-coups de vitesse en vol (dt modulé), balle qui se balade en pan quand elle est loin (se recale en approchant) ; couches de son dans \jk_ball (8e argument OSC `combo` : sub pulsé > 0,15, supersaw quinte > 0,35, turbine de bruit > 0,85) ; voix « combo 5, 10… ».
+- **Son joué par le téléphone** (Web Audio, déverrouillé au toucher de « Prendre la raquette » ; `navigator.audioSession.type = 'playback'` pour passer outre le mode silencieux de l'iPhone) :
+  - sabre synthétisé dans la page à partir des capteurs du téléphone (même calcul de mouvement que `Detector`, aucun délai réseau), hauteur du joueur transposée de `telephone.transposition` octaves ; quand `telephone.sabre_sur_telephone` est vrai, l'ordinateur coupe le sabre de ce joueur (`/saber i 0`, clé `Game.players_key`) ;
+  - « toc » d'impact (hauteur, volume, longueur selon la force) à chaque frappe validée par le jeu, + zap sur frappe parfaite. Paramètres envoyés par `phone_sound()` dans la réponse de `/api/raquette`.
+  - Les erreurs TLS des connexions annexes de Safari (certificat refusé) sont masquées dans la console (`wrap_https`).
+- Vibreur iPhone : pas de `navigator.vibrate` ; la page bascule un `<input type=checkbox switch>` caché (petit retour haptique sur iOS 18+), en plus du flash d'écran. Non vérifié sur un vrai iPhone.
+- **Montée sonore du combo** : la balle glisse du grave vers l'aigu (`balle.depart_grave` −7 → + `montee_combo` 19 demi-tons, args `low`/`rise` de \jk_ball). **Riser** (son `riser`, \jk_fx_riser ou sample) joué au début de chaque retour (apex de l'élastique ou rebond du mur), durée = temps d'arrivée prédit (`Game.arrival_time`, précision ≈ 5 ms) : il culmine pile quand la balle arrive ; volume et hauteur montent avec le combo ; un sample de riser est étiré pour finir à l'arrivée (`/play` a un 8e argument `dur`).
+- **Force** : seuil de force max téléphone à 10 g (Simon était souvent à 100 % à 7 g) ; le téléphone affiche le pic du geste en g (`Detector.last_peak`).
+- **QR codes** (`qr.py`, encodeur maison sans dépendance car l'installation de paquets pip a été refusée ; vérifié avec `zbarimg`, UTF-8 via ECI) : page `/qr` imprimable + `qr/wifi.png` et `qr/raquette.png`. Le nom mDNS de la machine (`phone.local_name()`, ici `nom-de-la-machine.local`) est ajouté au certificat, mais le QR code utilise l'IP ; réglages `reseau.*` (nom et mot de passe du Wi-Fi en clair dans config.json, adresse de remplacement).
+- **Lancement sans VS Code** : double-clic sur « Lancer Jokari (Mac).command » (ou .bat sous Windows) ; fermer la fenêtre arrête tout (SIGHUP/SIGTERM → arrêt propre, `/quit` envoyé à scsynth). Python lancé en `-u` pour que la console et le journal systemd s'affichent tout de suite. Manuel : « Mode d'emploi.md ».
+- **Sortie audio (Mac)** (`audio.py`, classe `Engine` dans jokari.py) : réglage `general.sortie_audio` ("" = sortie par défaut, suivie toutes les 3 s : un changement relance SuperCollider dessus). SuperCollider reçoit `JOKARI_OUT` / `JOKARI_IN` (variables d'environnement lues dans le .scd) ; l'entrée est toujours un micro non Bluetooth : au premier essai, SuperCollider avait ouvert le micro de l'enceinte Bluetooth de Simon, qui était passée en kit mains libres (mono 16 kHz) et le son ne sortait plus. Avertissement dans la console si l'enceinte choisie est en mono ≤ 24 kHz. Une entrée à 48 kHz avec une sortie à 44,1 kHz démarre sans erreur.
+- **Arpégiateur** (\jk_arp, section `arpegiateur`, `/set arp …`, reçoit les mêmes valeurs que `/ball`) : demande de Simon. Entre quand le niveau de combo dépasse `seuil` (0,35). Notes accordées sur la balle (même montée grave → aigu), motif montant/descendant sur 2 octaves (mineur, majeur, quintes, aléatoire via Dswitch1), tempo = `tempo` × (1 + combo) × vitesse × tension, notes pincées, filtre ouvert par l'énergie de frappe, ping-pong gauche/droite. Remplace l'ancienne couche « arpège FM » de \jk_ball.
+- **Indicatif à l'octave** (\jk_ball, args `cue`/`cueVol`, 10e argument de `/ball`) : la balle se double à l'octave (sinus + triangle, trémolo qui accélère) pendant `balle.indicatif_avance` (0,5 s) avant le moment idéal, culmine sur `moment_parfait` puis s'efface en 0,15 s.
+- **Souffle « shaper » du retour** (args `approach`/`noiseVol`, 11e argument de `/ball` = 1 − distance relative pendant le retour) : bruit filtré stéréo, pompé par une enveloppe en dent de scie (style ShaperBox) dont la fréquence passe de 2 à ~28 Hz à l'approche, plus vite si la frappe était forte.
+- **Musique de victoire** (\jk_vlead, \jk_vpad, \jk_vpluck, \jk_vbass, \jk_vkick, \jk_vsnare + fonction `victory` dans le .scd) : ≈ 5 s à 132 bpm, fanfare sur I – vi – IV – V – I ; jouée à la place de \jk_fx_victoire si aucun sample n'est choisi pour « victoire ».
+- **Trinquer en cognant deux téléphones** (corrigé) : horloge de chaque téléphone recalée sur celle du jeu (plus petit décalage observé, `PhoneRemote._offset`), tolérance propre `telephone.fenetre_trinque` (0,25 s), `telephone.seuil_choc` abaissé à 1,0 ; le téléphone affiche « Tchin ! (attends l'autre…) » + petit son quand il sent le choc. Vérifié avec deux faux téléphones (horloges décalées de 1 300 s, gigue Wi-Fi 0–60 ms).
+- **Page raquette** (refaite) : écran d'accueil avec **prénom** (gardé en localStorage, envoyé à chaque requête, `PhoneRemote.name`) ; en haut, prénom · numéro et score ; **scène SVG en direct** pilotée par le jeu (distance réelle de la balle extrapolée entre deux réponses, élastique qui se tend au-delà de `longueur_elastique`, mur en pelote, « À toi ! » et personnage coloré quand c'est ton tour, raquette armée puis coup quand tu frappes, onde de choc, doré sur frappe parfaite, secousse orange sur faute, « → nom » quand la balle va à un autre) ; plus de bouton Tchin (on cogne les téléphones ; « 🤖 Contre l'ordi » lance la partie seul) ; aide « Comment jouer ? » repliée en bas.
+- **Vue « lumière »** (par défaut pendant la partie, page raquette) : tout l'écran est une source de lumière pilotée par le jeu — sombre balle au loin, s'illumine quand elle revient vers toi en pulsant de plus en plus vite (comme le souffle sonore), respire quand c'est à toi de servir, s'éteint avec ta balle qui s'éloigne ; flash blanc (frappe), doré (parfaite), orange (faute). Bouton 👤 / 💡 pour passer à la vue personnage, choix gardé en localStorage (`jokari_vue`).
+- **« Annuler la saisie » sur iPhone** (secouer pour annuler, déclenché par le champ prénom) : l'écran d'accueil et son champ sont retirés du DOM dès qu'on appuie sur « Jouer ». À confirmer sur l'iPhone.
+- **Activer / désactiver les joueurs** depuis la page de réglages (carte « 👥 Joueurs », `WiimoteManager.listing()` / `set_enabled()`, `BaseRemote.enabled`) : une raquette désactivée libère son numéro ; son téléphone affiche qu'elle est désactivée.
+- **Ordre de jeu annoncé** au début de chaque partie (`Game.new_game`, `self.order`) : « A contre B. A commence. » ou « Ordre de jeu : A, puis B, puis C. A commence. » ; affiché dans le message à plus de 2 joueurs ; le bot attend la fin de l'annonce.
+- **Écran verrouillé pendant la partie** (page raquette, classe `lock`) : seuls boutons / summary / input réagissent ; touchstart/touchmove/touchend, gestes, double-tap, menu et sélection bloqués.
+- **Carte « 💪 Frappes »** sur la page de réglages : 14 dernières frappes (`Game.hits` : prénom, force %, pic en g, ✨ parfaite, 🎾 service).
+- **Prénoms dans le jeu** (`Game.name()`) : messages, « Simon commence », score à plus de 2 joueurs, et à la fin « Bravo Simon, tu gagnes ! » dit 0,9 s après le début de la musique de victoire.
+- **Page de réglages** rangée par familles repliables (`FAMILLES` dans jokari.py : Partie, Téléphones et manettes, Son, Réseau, + Outils) ; la section téléphone est coupée en « Téléphones (gestes) » et « Son des téléphones ».
+- **QR code de la raquette** : utilise l'adresse IP (demande de Simon : `https://IP-DE-L-ORDINATEUR:8443/raquette`), pas le nom `.local` ; refait à chaque lancement ; `reseau.adresse` permet de forcer une autre adresse.
+- **Style « Dubstep — Lux Cache »** (`general.style`, kits dans `kits/*.json`, samples copiés dans `samples/kits/lux_dubstep/`, ignorés par git car banque commerciale de Simon) : 41 samples choisis par nom et durée (pas écoutés) : frappe propre à chaque joueur (J1 snares NEUROWARTH, J2 impacts CUTSPACE Cortal, J3 snares BJAZZFBK, J4 claps), parfaite (GRIIGG IMPACT DIST, FRACTURED IMPACT), riser (ARISE RISER, étirés jusqu'à l'arrivée), faute (GRIIGG BASS HIT DOWN / NOISE HIT), service (SAD LASER), élastique/mur (PORTWAY METALLIC / KICK STOMP), tchin (SV1 GLASS), point (44OX, SNAREYGOOD). **Round robin** : chaque son tourne sur ses variantes (`Sound._kit_key`, clés SuperCollider « nom#i » / « impact#jP#i ») + hauteur aléatoire ; un sample choisi à la main reste prioritaire ; chargement incrémental (`Sound._loaded`). **Wobble** (désactivé par défaut depuis le retour de Simon : « trop wobble », on perdait la sensation de distance et de vitesse) de la balle calé sur le tempo (`dub`, `bpm` de \jk_ball : noire → croche → triolet → double avec le combo). Le style Dubstep = des sons de type dubstep, **sans beat** (demande de Simon : « ce n'est pas vraiment un jeu musical »).
+- **Mode musical** (mode de jeu à part, désactivé par défaut : `musical.actif`, bouton « 🎵 Mode musical » de la page de réglages, section « Mode musical ») : beat demi-tempo (Routine dans le .scd, `/beat on niveau volume bpm`) — grosse caisse sur 1, caisse claire sur 3, charleys et contretemps avec le combo ; avec les samples `beat` du kit s'il en a (`/beatkit`), sinon batterie synthétisée (\jk_vkick, \jk_vsnare, \jk_vhat). Le tempo `musical.bpm` cale aussi le wobble dubstep.
+- **Frappe lente = le jeu ralentit** (`physique.ralenti`, `seuil_lent`) : élastique détendu (balle qui flotte), pas d'héritage de vitesse, combo qui retombe sous `seuil_lent`. Force 0 : 2,9 m/s, retour en 4,9 s ; force 1 : 19,6 m/s, 1,8 s.
+- **Annonce de point** : la voix dit seulement « Point pour <prénom> » ; le score est affiché sur les téléphones.
+- **Trois vues sur le téléphone** (sélecteur 💡 👤 🔢 en haut de chaque vue, `jokari_vue`) : lumière, personnage + explications, score seul sans aucun effet (flashs désactivés). Le score est toujours en haut.
+- **Adversaires virtuels** (`jeu.adversaires_virtuels` 0–3, `jeu.niveau_adversaire` 0–1, `Game.bots()`) : occupent les numéros après les vrais joueurs. Ils servent après 1,2–2,8 s, renvoient à une distance aléatoire dans la fenêtre (réussite 35 % → 97 % selon le niveau), trinquent toujours. Que des bots : ils jouent seuls (démo, réglage du son). Bouton « 🤖 Adversaire virtuel » sur la page raquette. À ne pas confondre avec `joueurs_virtuels` (test, frappés à la main depuis la page de réglages).
+- Voix du score : espeak-ng (Linux), `say` (Mac), PowerShell System.Speech (Windows). La voix est enregistrée dans un fichier son, que SuperCollider joue.
+
+## État actuel
+- La logique de jeu a été testée en simulation (échanges, fautes, points, trinquer, dans les deux modes).
+- Le pilote hidapi a été testé avec une fausse manette (coups, bouton HOME, calibration, emplacement vide de la DolphinBar).
+- Les captures de la page web sont validées par Simon : « très bien pour l'instant ».
+- SuperCollider 3.14.1 installé sur le Mac (Homebrew) : le `.scd` démarre sans erreur, partie complète jouée en simulation sans erreur dans la console. Le rendu sonore n'a pas encore été écouté.
+- Raquette téléphone testée avec deux faux téléphones en HTTPS (numéros, Tchin, service, faute, point, vibrations). Pas encore testée sur un vrai téléphone.
+- **Jamais testé sur du vrai matériel** : les vraies Wiimotes, les vibreurs, les LEDs, la voix, un vrai téléphone. Wiimote en Bluetooth direct sur macOS 26 : à tester (sinon DolphinBar).
+
+## Prochaines étapes
+1. Continuer les tests avec l'iPhone (force, timing, sabre et « toc » du téléphone, riser, montée du combo) ; tester un téléphone Android (vibreur, résolution du nom `.local`).
+2. Connecter les vraies Wiimotes et ajuster `seuil_coup`, `seuil_choc` et `force_max` avec de vrais gestes.
+3. Affiner le sound design à l'oreille (balle, sabres, impacts) et choisir des samples.
+4. Régler la difficulté : `fenetre` et `vitesse_max`.
+5. À faire plus tard (demandé par Simon, pas encore commencé) : **entrer son nom** sur la page raquette pour que le jeu dise qui joue (annonces « Simon commence », score avec les prénoms) ; **réglage du volume de la voix** (annonces et score), séparé du volume général.
+6. Si on passe la balle en **samples** : système de **time-stretching** (le sample s'étire et se compresse selon la vitesse et la distance).
+7. Tester sur de vrais téléphones : trinquer en les cognant, l'indicatif à l'octave, le souffle du retour, la musique de victoire, l'animation.
+8. Idées laissées en suspens : un mode « animateur » simplifié sur la page web, et un passage en multicanal plus tard.

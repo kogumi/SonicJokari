@@ -1,0 +1,13 @@
+# Service utilisateur : ~/.config/systemd/user/jokari.service
+[Unit]
+Description=Sonic Jokari
+After=default.target
+
+[Service]
+ExecStart=%h/jokari-sonore/start.sh
+Restart=always
+RestartSec=3
+# Environment=JOKARI_ALSA=hw:1
+
+[Install]
+WantedBy=default.target

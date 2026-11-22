@@ -1,0 +1,86 @@
+{
+  "nom": "Dubstep — Lux Cache",
+  "source": "Lux Cache (banque de Simon) — fichiers copiés pour un usage personnel, ne pas redistribuer",
+  "joueurs": [
+    [
+      "lux_s5_NEUROWARTH_03_SD.wav",
+      "lux_s5_NEUROWARTH_07_SD.wav",
+      "lux_s5_NEUROWARTH_08_SD.wav",
+      "lux_s5_NEUROWARTH_10_SD.wav",
+      "lux_s5_NEUROWARTH_11_SD.wav"
+    ],
+    [
+      "lux_CUTSPACE_CUTSPACE_CI01.wav",
+      "lux_CUTSPACE_CUTSPACE_CI05.wav",
+      "lux_CUTSPACE_CUTSPACE_CI06.wav"
+    ],
+    [
+      "lux_s5_BJAZZFBKSNARE_03.wav",
+      "lux_s5_BJAZZFBKSNARE_04.wav",
+      "lux_s5_BJAZZFBKSNARE_05.wav",
+      "lux_s5_BJAZZFBKSNARE_06.wav",
+      "lux_s5_BJAZZFBKSNARE_08.wav"
+    ],
+    [
+      "lux_S2_RIBBONPERC_CLAP_16.wav",
+      "lux_S2_FEEL_CLAP_SINGLE.wav",
+      "lux_S2_FEEL_CLAP_STACK.wav",
+      "lc_ps_ALLOYFLOODS_PORTWAY_SNAREYGOOD.wav"
+    ]
+  ],
+  "sons": {
+    "parfait": [
+      "GRIIGG_IMPACT DIST 01 W DIDIER XCX PANX.wav",
+      "GRIIGG_IMPACT DIST 03 W DIDIER XCX PANX.wav",
+      "lux_S1_sd_FRACTURED_IMPACT.wav"
+    ],
+    "riser": [
+      "lux_s7_ARISE_RISER_02_SD.wav",
+      "lux_s7_ARISE_RISER_03_SD.wav",
+      "lux_s7_ARISE_RISER_06_SD.wav",
+      "lux_s7_ARISE_RISER_08_SD.wav",
+      "lux_s7_ARISE_RISER_09_SD.wav",
+      "lux_s7_ARISE_RISER_10_SD.wav"
+    ],
+    "faute": [
+      "GRIIGG_BASS HIT DOWN W FLUID MATTER.wav",
+      "GRIIGG_NOISE HIT 01 W LUKANN.wav"
+    ],
+    "service": [
+      "lux_S1_perc_SAD_LASER.wav"
+    ],
+    "elastique": [
+      "lc_ps_ALLOYFLOODS_PORTWAY_METALLIC.wav",
+      "lc_ps_ALLOYFLOODS_PORTWAY_METALLICA.wav"
+    ],
+    "mur": [
+      "lc_ps_ALLOYFLOODS_PORTWAY_KICK_STOMP.wav"
+    ],
+    "trinque": [
+      "lux_S2_SV1_SD_GLASS1.wav",
+      "lux_S2_SV1_SD_GLASS2.wav",
+      "lux_S2_SV1_SD_GLASS3.wav"
+    ],
+    "point": [
+      "lux_s3_44OX_02_SNARE.wav",
+      "lc_ps_ALLOYFLOODS_PORTWAY_SNAREYGOOD.wav"
+    ]
+  },
+  "beat": {
+    "kick": [
+      "lux_s5_DSMI_03_KICK.wav",
+      "lux_s5_3STATE_43_KICK.wav"
+    ],
+    "snare": [
+      "lux_s3_44OX_02_SNARE.wav",
+      "lux_s5_NEUROWARTH_07_SD.wav"
+    ],
+    "hat": [
+      "lux_s5_3STATE_11_PERC.wav",
+      "lux_s5_3STATE_32_PERC.wav",
+      "lux_s5_3STATE_31_PERC.wav"
+    ]
+  },
+  "dubstep": true,
+  "dossier": "samples/kits/lux_dubstep"
+}

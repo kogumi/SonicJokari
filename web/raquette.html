@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Sonic Jokari — raquette</title>
+<style>
+  :root { --bg:#111418; --card:#1b2027; --line:#2c333d; --txt:#e8ecf1; --dim:#8d97a5; --acc:#4fd1c5; --warn:#f6ad55; --gold:#ffd34d; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { min-height:100%; overflow-x:hidden; overscroll-behavior:none; -webkit-touch-callout:none; touch-action:manipulation; }
+  body.lock, body.lock * { touch-action:none; }
+  button, summary, input { touch-action:manipulation; }
+  body > * { min-width:0; }
+  body { margin:0; font-family:system-ui, sans-serif; background:var(--bg); color:var(--txt);
+         display:flex; flex-direction:column; padding:14px 16px 20px; gap:12px; user-select:none; -webkit-user-select:none;
+         transition: background .08s; }
+  body.flash { background:#16302e; } body.flashw { background:#3a2a14; } body.flashp { background:#3d3412; }
+  .top { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+  #who { flex:1; min-width:0; font-size:22px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #who .num { color:var(--acc); }
+  #who.off { color:var(--dim); font-weight:600; }
+  #score { font-size:26px; font-weight:800; letter-spacing:.04em; white-space:nowrap; }
+  .scene { position:relative; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:6px 4px 2px; }
+  .scene svg { width:100%; height:auto; display:block; }
+  #combo { position:absolute; top:8px; right:12px; font-size:22px; font-weight:800; color:var(--gold); }
+  #msg { text-align:center; font-size:17px; min-height:2.6em; }
+  #force { font-size:14px; color:var(--dim); text-align:center; min-height:1.2em; }
+  .row { display:flex; gap:10px; }
+  button { flex:1 1 0; min-width:0; white-space:normal; line-height:1.2; font:inherit; font-size:15px; color:var(--txt); background:var(--card); border:1px solid var(--line);
+           border-radius:12px; padding:14px 6px; }
+  button.acc { background:var(--acc); color:#08201e; border-color:var(--acc); font-weight:700; }
+  details#aide { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+  details#aide summary { cursor:pointer; color:var(--dim); font-size:15px; }
+  details#aide ol { margin:8px 0 2px; padding-left:20px; font-size:14px; line-height:1.45; }
+  .small { font-size:13px; color:var(--dim); text-align:center; }
+  #start { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; z-index:10;
+           align-items:center; justify-content:center; gap:16px; padding:24px; text-align:center; }
+  #start input { font:inherit; font-size:22px; width:100%; max-width:340px; text-align:center; color:var(--txt);
+                 background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  #start button { flex:none; width:100%; max-width:340px; font-size:20px; padding:18px; }
+  .err { color:var(--warn); }
+  .lbl { font-family:system-ui, sans-serif; font-size:10px; fill:var(--dim); }
+  #toi { font-family:system-ui, sans-serif; font-size:13px; font-weight:800; fill:var(--acc); }
+  /* vue « lumière » : tout l'écran devient une source de lumière qui suit la partie */
+  #light { position:fixed; inset:0; z-index:8; background:#111418; display:none; }
+  /* sélecteur de vue : grande barre facile à toucher (en bas de l'écran pendant la partie) */
+  .views { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+  .views button { min-height:46px; padding:6px 2px; font-size:14px; border-radius:12px; background:rgba(0,0,0,.3);
+                  display:flex; align-items:center; justify-content:center; gap:4px; white-space:nowrap; }
+  .views button .ic { font-size:20px; }
+  .views button.on { background:var(--acc); border-color:var(--acc); color:#08201e; font-weight:700; }
+  .ovl-bottom { position:absolute; left:14px; right:14px; bottom:max(16px, env(safe-area-inset-bottom)); }
+  .ovl-top { position:absolute; left:14px; right:14px; top:max(12px, env(safe-area-inset-top));
+             display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .bigscore { font-size:34px; font-weight:800; color:#fff; text-shadow:0 1px 6px rgba(0,0,0,.5); line-height:1.1; }
+  .bigscore small { display:block; font-size:13px; font-weight:600; opacity:.75; }
+  /* vue « score » : rien que le score, sans aucun effet */
+  #scoreview { position:fixed; inset:0; z-index:8; background:var(--bg); display:none; flex-direction:column;
+               padding:max(14px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); gap:14px; }
+  #scoreview .rows { flex:1; display:flex; flex-direction:column; justify-content:center; gap:14px; }
+  #scoreview .pr { display:flex; justify-content:space-between; align-items:baseline; font-size:28px; font-weight:700;
+                   border-bottom:1px solid var(--line); padding-bottom:10px; }
+  #scoreview .pr b { font-size:46px; }
+  #scoreview .pr.me { color:var(--acc); }
+  #scoreview .smsg { text-align:center; font-size:18px; color:var(--dim); min-height:2.4em; }
+</style>
+</head>
+<body>
+<div class="top">
+  <div id="who" class="off">…</div>
+  <div id="score"></div>
+</div>
+<div class="views" data-v></div>
+
+<!-- La scène reflète la partie en direct : distance réelle de la balle, élastique, frappes, tour de jeu -->
+<div class="scene">
+  <svg id="scene" viewBox="0 0 320 130" aria-label="La partie en direct">
+    <line x1="0" y1="112" x2="320" y2="112" stroke="var(--line)" stroke-width="2"/>
+    <g id="peg"><rect x="62" y="100" width="18" height="12" rx="2" fill="var(--dim)"/></g>
+    <rect id="wall" x="302" y="18" width="12" height="94" fill="var(--dim)" style="display:none"/>
+    <line id="elastic" x1="71" y1="100" x2="90" y2="84" stroke="var(--warn)" stroke-width="2.5" stroke-linecap="round"/>
+    <circle id="ball" cx="90" cy="84" r="6.5" fill="var(--acc)"/>
+    <text id="ballLbl" class="lbl" x="90" y="70" text-anchor="middle"></text>
+    <circle id="ring" cx="82" cy="84" r="4" fill="none" stroke="var(--acc)" stroke-width="1.5" opacity="0"/>
+    <g id="fig" stroke="var(--txt)" stroke-width="2.6" stroke-linecap="round" fill="none">
+      <circle id="head" cx="30" cy="52" r="7.5"/>
+      <line x1="30" y1="60" x2="30" y2="88"/>
+      <line x1="30" y1="88" x2="22" y2="112"/><line x1="30" y1="88" x2="38" y2="112"/>
+      <line x1="30" y1="68" x2="40" y2="77"/>
+      <g id="racket"><line x1="40" y1="77" x2="60" y2="81"/><ellipse cx="66" cy="82" rx="7" ry="10" stroke="var(--acc)"/></g>
+    </g>
+    <text id="toi" x="30" y="30" text-anchor="middle"></text>
+  </svg>
+  <div id="combo"></div>
+</div>
+
+<div id="msg">Connexion…</div>
+<div id="force">&nbsp;</div>
+<label id="hap" style="position:absolute;left:-9999px"><input type="checkbox" switch></label>
+
+<div class="row">
+  <button onclick="press('home')">Nouvelle partie</button>
+  <button id="modeBtn" onclick="press('plus')">Mode</button>
+  <button id="bot" onclick="press('adversaire')">🤖 Contre l'ordi</button>
+</div>
+
+<details id="aide">
+  <summary>Comment jouer ?</summary>
+  <ol>
+    <li><b>Pour lancer la partie</b> : cogne doucement ton téléphone contre celui d'un autre joueur (on trinque).
+      Seul : appuie sur « 🤖 Contre l'ordi », la partie démarre.</li>
+    <li>Fais un <b>grand geste</b> : la balle part. Plus tu frappes fort, plus elle va loin… et plus elle revient vite.</li>
+    <li>Écoute-la revenir : le son accélère, puis se double d'une note aiguë juste avant d'arriver.
+      <b>Frappe quand tu l'entends arriver sur toi</b>. Pile au bon moment : frappe parfaite !</li>
+    <li>Enchaîne les échanges : <b>combo</b> ! Tout accélère et le son s'emballe. Rater remet le combo à zéro.</li>
+  </ol>
+  <div class="small">Tiens le téléphone fermement (dragonne conseillée) et monte le volume : ton sabre sort de ta main.</div>
+</details>
+
+<div id="light">
+  <div class="ovl-top"><div class="bigscore" id="lscore"></div></div>
+  <div class="ovl-bottom"><div class="views" data-v></div></div>
+</div>
+
+<div id="scoreview">
+  <div class="bigscore" id="sscombo" style="color:var(--gold); min-height:1.1em"></div>
+  <div class="rows" id="srows"></div>
+  <div class="smsg" id="smsg"></div>
+  <div class="views" data-v></div>
+</div>
+
+<div id="start">
+  <div style="font-size:24px;font-weight:800">Sonic Jokari</div>
+  <div class="small">Ton téléphone devient ta raquette.</div>
+  <input id="nom" type="text" maxlength="20" placeholder="Ton prénom" autocomplete="given-name" autocapitalize="words">
+  <button class="acc" id="go">Jouer</button>
+  <div class="small">Garde l'écran allumé pendant la partie.</div>
+  <div id="starterr" class="err"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let id, nom = '';
+try { id = localStorage.getItem('jokari_id'); nom = localStorage.getItem('jokari_nom') || ''; } catch (e) {}
+if (!id) { id = Math.random().toString(36).slice(2, 12); try { localStorage.setItem('jokari_id', id); } catch (e) {} }
+$('nom').value = nom;
+
+let buf = [], busy = false, pendingBtn = null, gotMotion = false, fails = 0, wake = null, lastPerfect = null;
+let lastForce = null, chocShown = -1e9;
+let vue = 'lumiere', pulse = 0, lastFrame = 0;
+try { vue = localStorage.getItem('jokari_vue') || 'lumiere'; } catch (e) {}
+function setVue(v) {
+  vue = v; try { localStorage.setItem('jokari_vue', v); } catch (e) {}
+  document.querySelectorAll('.views button').forEach(b => b.classList.toggle('on', b.dataset.vue === v));
+}
+const VUES = [['lumiere', '💡', 'Lumière'], ['perso', '👤', 'Bonhomme'], ['score', '🔢', 'Score']];
+
+// ===================== Son joué par le téléphone =====================
+// Sabre : synthétisé ici à partir des capteurs du téléphone (aucun délai réseau).
+// « Toc » : à chaque frappe validée par le jeu, hauteur et volume selon la force.
+let ac = null, master = null, sab = null, son = null, mot = 0, grav = 9.81, lastAudio = 0;
+
+function initAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}  // iPhone : ignore le mode silencieux
+  try {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    master = ac.createDynamicsCompressor();
+    master.connect(ac.destination);
+    const b = ac.createBuffer(1, 1, ac.sampleRate), s = ac.createBufferSource();   // déverrouille l'audio
+    s.buffer = b; s.connect(master); s.start();
+  } catch (e) { ac = null; }
+}
+document.addEventListener('visibilitychange', () => { if (ac && document.visibilityState === 'visible') ac.resume(); });
+
+function noiseBuffer(sec) {
+  const b = ac.createBuffer(1, Math.round(ac.sampleRate * sec), ac.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return b;
+}
+
+function buildSaber() {
+  const out = ac.createGain(); out.gain.value = 0;
+  const filt = ac.createBiquadFilter(); filt.type = 'lowpass'; filt.Q.value = 3; filt.frequency.value = 400;
+  const shaper = ac.createWaveShaper(), curve = new Float32Array(1024);
+  for (let i = 0; i < 1024; i++) curve[i] = Math.tanh((i / 512 - 1) * 1.5);
+  shaper.curve = curve;
+  const mix = ac.createGain(); mix.gain.value = 1;
+  const oscs = [[1, 'sawtooth', 0.15], [1.007, 'sawtooth', 0.15], [2.01, 'sawtooth', 0.12], [0.5, 'sine', 0.35]].map(([r, type, g]) => {
+    const o = ac.createOscillator(), og = ac.createGain();
+    o.type = type; o.frequency.value = 280 * r; og.gain.value = g;
+    o.connect(og).connect(mix); o.start(); return [o, r];
+  });
+  const nz = ac.createBufferSource(); nz.buffer = noiseBuffer(2); nz.loop = true;
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 2;
+  const ng = ac.createGain(); ng.gain.value = 0;
+  nz.connect(bp).connect(ng).connect(mix); nz.start();
+  mix.connect(shaper).connect(filt).connect(out).connect(master);
+  return { out, filt, oscs, bp, ng };
+}
+
+function updateSaber() {                               // appelé à chaque échantillon de capteur
+  if (!ac || !son) return;
+  const now = ac.currentTime;
+  if (now - lastAudio < 0.012) return;                 // ~80 mises à jour/s suffisent
+  lastAudio = now;
+  if (!son.sabre) { if (sab) sab.out.gain.setTargetAtTime(0, now, 0.1); return; }
+  if (!sab) sab = buildSaber();
+  const m = Math.min(Math.max(mot / Math.max(son.fmax * 0.6, 0.1), 0), 1.5);
+  const f = son.freq * (1 + m * 0.12);
+  sab.oscs.forEach(([o, r]) => o.frequency.setTargetAtTime(f * r, now, 0.02));
+  sab.filt.frequency.setTargetAtTime(Math.min(250 * (son.freq / 70) ** 0.5 + m * 5000 * son.bright, 14000), now, 0.02);
+  sab.bp.frequency.setTargetAtTime(Math.min(f * 6, 12000), now, 0.03);
+  sab.ng.gain.setTargetAtTime(son.buzz * m * 0.6, now, 0.02);
+  sab.out.gain.setTargetAtTime(Math.min(son.idle + m * (1 - son.idle), 1.2) * son.vol * 0.5, now, 0.03);
+}
+
+function tink() {                                     // petit « tchin » de verre dans la main
+  if (!ac) return;
+  const t = ac.currentTime + 0.005;
+  [2093, 3378, 5120].forEach((f, i) => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.value = f; g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18 / (i + 1), t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6 / (i + 1));
+    o.connect(g).connect(master); o.start(t); o.stop(t + 0.7);
+  });
+}
+
+function toc(force, perfect) {
+  if (!ac || !son || !son.toc) return;
+  const t = ac.currentTime + 0.005, v = son.toc_vol * (0.25 + 0.75 * force);
+  const o = ac.createOscillator(), g = ac.createGain();       // corps : hauteur qui tombe, plus haute si fort
+  o.frequency.setValueAtTime(420 + 900 * force, t);
+  o.frequency.exponentialRampToValueAtTime(140 + 220 * force, t + 0.07);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(v, t + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12 + 0.15 * force);
+  o.connect(g).connect(master); o.start(t); o.stop(t + 0.35);
+  const n = ac.createBufferSource(), hp = ac.createBiquadFilter(), ng = ac.createGain();   // claquement
+  n.buffer = noiseBuffer(0.05); hp.type = 'highpass'; hp.frequency.value = 2000 + 3000 * force;
+  ng.gain.setValueAtTime(v * 0.8, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.015 + 0.02 * force);
+  n.connect(hp).connect(ng).connect(master); n.start(t);
+  if (perfect) {                                               // frappe parfaite : zap qui monte
+    const z = ac.createOscillator(), zf = ac.createBiquadFilter(), zg = ac.createGain();
+    z.type = 'sawtooth'; z.frequency.setValueAtTime(400, t); z.frequency.exponentialRampToValueAtTime(3200, t + 0.3);
+    zf.type = 'lowpass'; zf.Q.value = 8; zf.frequency.setValueAtTime(800, t); zf.frequency.exponentialRampToValueAtTime(9000, t + 0.3);
+    zg.gain.setValueAtTime(0.0001, t); zg.gain.exponentialRampToValueAtTime(son.toc_vol * 0.5, t + 0.02);
+    zg.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    z.connect(zf).connect(zg).connect(master); z.start(t); z.stop(t + 0.55);
+  }
+}
+
+// Vibreur : Android -> navigator.vibrate. iPhone (iOS 18+) : pas d'API, mais basculer un
+// interrupteur <input switch> déclenche un petit retour haptique. On l'enchaîne pour « vibrer ».
+const canVibrate = typeof navigator.vibrate === 'function';
+function buzz(pattern) {
+  if (canVibrate) { navigator.vibrate(pattern); return; }
+  const total = Array.isArray(pattern) ? pattern.reduce((a, b) => a + b, 0) : pattern;
+  const n = Math.max(1, Math.min(8, Math.round(total / 60)));
+  for (let i = 0; i < n; i++) setTimeout(() => { try { $('hap').click(); } catch (e) {} }, i * 55);
+}
+
+function onMotion(e) {
+  const a = e.accelerationIncludingGravity;
+  if (!a || a.x == null) return;
+  gotMotion = true;
+  buf.push([performance.now(), a.x, a.y, a.z]);
+  if (buf.length > 400) buf.shift();
+  // intensité de mouvement locale (même calcul que le jeu) pour le sabre du téléphone
+  const mag = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z), dyn = Math.abs(mag - grav) / grav;
+  if (dyn < 0.08) grav += (mag - grav) * 0.02;
+  mot = dyn > mot ? dyn : mot * 0.93;
+  updateSaber();
+}
+
+function press(b) { pendingBtn = b; buzz(20); }
+
+function flash(cls, ms) {
+  if (vue === 'score') return;                         // vue score : aucun effet visuel
+  document.body.classList.add(cls);
+  setTimeout(() => document.body.classList.remove(cls), ms || 120);
+}
+
+// ===================== Scène en direct =====================
+// Le personnage, c'est toi. La balle est placée à sa vraie distance (extrapolée entre deux
+// réponses du jeu), l'élastique se tend au-delà de sa longueur, la raquette part quand tu frappes.
+const X0 = 90, X1 = 294;
+const G = { etat: 'attente', d: 0, v: 0, dref: 15, L0: 5, mode: 'jokari', me: null, recv: 0, srv: 0, hit: 0, t: 0, actif: true };
+let swingT = -1e9, perfT = -1e9, faultT = -1e9, hitRingT = -1e9;
+
+function render(now) {
+  const dt = Math.min(Math.max((now - G.t) / 1000, 0), 0.12);
+  const flying = G.etat === 'vol';
+  let d = flying ? Math.max(G.d + G.v * dt, 0) : 0;
+  const pel = G.mode === 'pelote';
+  const x = X0 + (X1 - X0) * Math.min(d / Math.max(G.dref, 1), 1);
+  const ball = $('ball'), el = $('elastic');
+  ball.setAttribute('cx', x.toFixed(1));
+  ball.setAttribute('opacity', flying || G.etat === 'service' ? 1 : 0.35);
+  // élastique : tendu (orange, plus fin) au-delà de sa longueur au repos
+  el.style.display = pel ? 'none' : '';
+  $('peg').style.display = pel ? 'none' : '';
+  $('wall').style.display = pel ? '' : 'none';
+  el.setAttribute('x2', x.toFixed(1));
+  const stretch = Math.max(d - G.L0, 0) / Math.max(G.dref - G.L0, 1);
+  el.setAttribute('stroke-width', (2.6 - 1.9 * Math.min(stretch, 1)).toFixed(2));
+  el.setAttribute('stroke', stretch > 0 ? 'var(--warn)' : 'var(--dim)');
+  // à qui va la balle ?
+  const mine = G.me && ((flying && G.v < 0 && G.recv === G.me) || (G.etat === 'service' && G.srv === G.me));
+  const other = flying && G.v < 0 && G.recv !== G.me ? (NOMS[G.recv - 1] || ('joueur ' + G.recv)) : '';
+  $('ballLbl').setAttribute('x', Math.min(x, 300).toFixed(1));
+  $('ballLbl').setAttribute('text-anchor', x > 240 ? 'end' : 'middle');
+  $('ballLbl').textContent = other ? '→ ' + other : (flying ? Math.round(d) + ' m' : '');
+  $('toi').textContent = mine ? (G.etat === 'service' ? 'À toi de servir !' : 'À toi !') : '';
+  // personnage : couleur selon la situation, secousse sur une faute
+  const sinceP = (now - perfT) / 1000, sinceF = (now - faultT) / 1000;
+  const col = sinceP < 0.6 ? 'var(--gold)' : sinceF < 0.6 ? 'var(--warn)' : mine ? 'var(--acc)' : 'var(--txt)';
+  $('fig').setAttribute('stroke', col);
+  const shake = sinceF < 0.4 ? Math.sin(sinceF * 60) * 3 * (1 - sinceF / 0.4) : 0;
+  $('fig').setAttribute('transform', `translate(${shake.toFixed(1)} 0)`);
+  // raquette : armée quand c'est à toi, coup rapide quand tu frappes
+  const sw = (now - swingT) / 1000;
+  let ang = mine ? -55 : -20;
+  if (sw < 0.08) ang = -55 + 75 * (sw / 0.08);
+  else if (sw < 0.4) ang = 20 - (20 - ang) * ((sw - 0.08) / 0.32);
+  $('racket').setAttribute('transform', `rotate(${ang.toFixed(1)} 40 77)`);
+  // onde de choc au moment de la frappe
+  const rg = (now - hitRingT) / 1000, ring = $('ring');
+  ring.setAttribute('r', (4 + 30 * Math.min(rg / 0.35, 1)).toFixed(1));
+  ring.setAttribute('opacity', rg < 0.35 ? (0.9 * (1 - rg / 0.35)).toFixed(2) : 0);
+  ring.setAttribute('stroke', sinceP < 0.6 ? 'var(--gold)' : 'var(--acc)');
+  renderLight(now, d, flying);
+  requestAnimationFrame(render);
+}
+let NOMS = [];
+
+// Vue lumière : sombre quand la balle est loin, s'illumine quand elle revient vers toi en pulsant
+// de plus en plus vite (comme le souffle sonore) ; respire quand c'est à toi de servir ;
+// flash blanc à la frappe, doré si parfaite, orange sur une faute.
+const DARK = [17, 20, 24], TEAL = [79, 209, 197], WHITE = [255, 255, 255], GOLD = [255, 211, 77], ORANGE = [246, 120, 40];
+function renderLight(now, d, flying) {
+  const playing = G.actif && G.me && ['service', 'vol', 'pause'].includes(G.etat);
+  document.body.classList.toggle('lock', !!playing);
+  const on = vue === 'lumiere' && playing;
+  $('light').style.display = on ? 'block' : 'none';
+  $('scoreview').style.display = vue === 'score' && playing ? 'flex' : 'none';
+  if (!on) { lastFrame = now; return; }
+  const fdt = Math.min((now - lastFrame) / 1000, 0.1); lastFrame = now;
+  const dn = Math.min(d / Math.max(G.dref, 1), 1), ap = 1 - dn;
+  let L = 0.03;
+  if (flying && G.v < 0 && G.recv === G.me) {          // la balle revient vers moi
+    pulse += fdt * (2 + 26 * ap ** 1.5);
+    const pump = (1 - (pulse % 1)) ** 3;
+    L = 0.05 + 0.95 * ap ** 1.6 * (0.6 + 0.4 * pump);
+  } else if (flying && G.v > 0 && G.hit === G.me) {    // ma balle s'éloigne : la lumière s'éteint avec elle
+    L = 0.45 * (1 - dn) ** 1.5;
+  } else if (G.etat === 'service' && G.srv === G.me) { // à moi de servir : respiration lente
+    L = 0.12 + 0.16 * (0.5 + 0.5 * Math.sin(now / 420));
+  }
+  let col = TEAL.map((c, i) => DARK[i] + (c - DARK[i]) * Math.min(L, 1));
+  const fl = [[now - swingT, 0.25, WHITE], [now - perfT, 0.6, GOLD], [now - faultT, 0.7, ORANGE]];
+  fl.forEach(([ms, dur, c]) => {
+    const t = ms / 1000;
+    if (t >= 0 && t < dur) { const w = 1 - t / dur; col = col.map((v, i) => v + (c[i] - v) * w); }
+  });
+  $('light').style.background = `rgb(${col.map(v => Math.round(v)).join(',')})`;
+}
+document.querySelectorAll('[data-v]').forEach(box => VUES.forEach(([v, ic, t]) => {
+  const b = document.createElement('button'); b.innerHTML = `<span class="ic">${ic}</span><span>${t}</span>`; b.title = t; b.dataset.vue = v;
+  b.onclick = () => { setVue(v); buzz(20); }; box.appendChild(b);
+}));
+setVue(vue);
+
+// Écran verrouillé : seuls les boutons (et l'aide) réagissent au toucher. Pendant la partie,
+// plus de défilement, de zoom, de sélection ni de menu d'appui long.
+const TOUCHABLE = 'button, summary, input, a';
+['touchstart', 'touchmove', 'touchend'].forEach(ev => document.addEventListener(ev, e => {
+  const inGame = document.body.classList.contains('lock');
+  if (e.target.closest && e.target.closest(TOUCHABLE)) return;
+  if (ev === 'touchmove' && !inGame) return;          // hors partie : on peut faire défiler l'aide
+  if (e.cancelable) e.preventDefault();
+}, { passive: false }));
+['gesturestart', 'gesturechange', 'dblclick', 'contextmenu', 'selectstart'].forEach(ev =>
+  document.addEventListener(ev, e => { if (!(e.target.closest && e.target.closest('input'))) e.preventDefault(); }, { passive: false }));
+
+async function tick() {
+  if (busy) return;
+  busy = true;
+  const s = buf; buf = [];
+  const b = pendingBtn; pendingBtn = null;
+  try {
+    const r = await fetch('/api/raquette', { method: 'POST', body: JSON.stringify({ id, s, b, nom }) });
+    const j = await r.json();
+    fails = 0;
+    NOMS = j.noms || [];
+    Object.assign(G, { etat: j.etat, d: j.d || 0, v: j.v || 0, dref: j.dref || 15, L0: j.elastique || 5,
+                       mode: j.mode, me: j.joueur, recv: j.receveur, srv: j.serveur, hit: j.frappeur,
+                       actif: j.actif !== false, t: performance.now() });
+    const pts = j.points || [], noms = j.noms || [];
+    $('lscore').innerHTML = pts.length > 1 ? pts.join(' – ') + (j.combo >= 2 ? ' <span style="color:var(--gold)">×' + j.combo + '</span>' : '')
+      + '<small>' + noms.map(n => n.replace(/</g, '&lt;')).join(' · ') + '</small>' : '';
+    $('srows').innerHTML = pts.map((p, i) => `<div class="pr${i + 1 === j.joueur ? ' me' : ''}"><span>${(noms[i] || 'Joueur ' + (i + 1)).replace(/</g, '&lt;')}</span><b>${p}</b></div>`).join('');
+    $('smsg').textContent = j.message || '';
+    $('sscombo').textContent = j.combo >= 2 ? 'Combo ×' + j.combo : '';
+    if (j.joueur) { $('who').innerHTML = (j.nom ? j.nom + ' · ' : '') + '<span class="num">J' + j.joueur + '</span>'; $('who').className = ''; }
+    else { $('who').textContent = 'En attente…'; $('who').className = 'off'; }
+    $('msg').textContent = gotMotion ? j.message : 'Aucun capteur de mouvement reçu : ce navigateur ne les donne pas.';
+    $('score').textContent = (j.points && j.points.length > 1) ? j.points.join(' – ') : '';
+    $('modeBtn').textContent = j.mode === 'pelote' ? 'Mode : pelote' : 'Mode : jokari';
+    const bots = j.adversaires || [];
+    $('bot').textContent = bots.length ? '🤖 Ordi : oui' : '🤖 Contre l\'ordi';
+    $('bot').className = bots.length ? 'acc' : '';
+    const p = j.parfait || [0, 0];
+    const perfectNow = lastPerfect !== null && p[0] !== lastPerfect && p[1] === j.joueur;
+    lastPerfect = p[0];
+    $('combo').textContent = j.combo >= 2 ? '×' + j.combo : '';
+    son = j.son || null;
+    if (j.choc && (j.etat === 'attente' || j.etat === 'fin')) {   // le téléphone a senti le choc
+      tink(); flash('flashp', 200); buzz(40);
+      chocShown = performance.now();
+    }
+    if (performance.now() - chocShown < 1200 && (j.etat === 'attente' || j.etat === 'fin'))
+      $('msg').textContent = 'Tchin ! (attends l\'autre téléphone…)';
+    else if (j.etat === 'attente') $('msg').textContent = 'Cogne doucement ton téléphone contre celui d\'un autre joueur pour lancer la partie.';
+    if (j.actif === false) $('msg').textContent = 'Ta raquette est désactivée (page de réglages de l\'ordinateur).';
+    const fo = j.force || [0, 0, 0];
+    if (lastForce !== null && fo[0] !== lastForce && fo[1] === j.joueur) {
+      $('force').textContent = 'Dernière frappe : force ' + Math.round(fo[2] * 100) + ' %'
+        + (fo[3] ? ' (pic ' + fo[3].toFixed(1) + ' g)' : '');
+      toc(fo[2], perfectNow);
+      swingT = hitRingT = performance.now();
+    }
+    lastForce = fo[0];
+    if (perfectNow) {                                  // frappe parfaite : vibration en rafale + flash doré
+      buzz([80, 40, 80, 40, 260]); flash('flashp', 450); perfT = performance.now();
+    } else if (j.vibre > 0) {
+      buzz(Math.min(j.vibre, 1500));
+      flash(j.vibre >= 400 ? 'flashw' : 'flash');
+      if (j.vibre >= 400) faultT = performance.now();
+    }
+  } catch (e) {
+    if (++fails > 10) $('msg').textContent = 'Connexion perdue avec le jeu…';
+  } finally { busy = false; }
+}
+
+async function keepAwake() {
+  try { if ('wakeLock' in navigator) wake = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
+
+try { if (localStorage.getItem('jokari_aide') === 'ouvert') $('aide').open = true; } catch (e) {}
+$('aide').addEventListener('toggle', () => { try { localStorage.setItem('jokari_aide', $('aide').open ? 'ouvert' : 'ferme'); } catch (e) {} });
+
+$('go').onclick = async () => {
+  initAudio();          // tout de suite, pendant le toucher (exigé par l'iPhone)
+  nom = $('nom').value.trim().slice(0, 20);
+  try { localStorage.setItem('jokari_nom', nom); } catch (e) {}
+  try {
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+      const p = await DeviceMotionEvent.requestPermission();   // iPhone : autorisation obligatoire
+      if (p !== 'granted') { $('starterr').textContent = 'Accès aux mouvements refusé. Recharge la page pour réessayer.'; return; }
+    }
+  } catch (e) { $('starterr').textContent = 'Autorisation impossible : ' + e.message; return; }
+  if (!window.isSecureContext) { $('starterr').textContent = 'Ouvre la page en https:// pour avoir les capteurs.'; return; }
+  window.addEventListener('devicemotion', onMotion);
+  keepAwake();
+  // on retire complètement l'écran d'accueil et son champ de texte : sinon, en secouant le
+  // téléphone, l'iPhone propose « Annuler la saisie » en pleine partie
+  $('nom').blur();
+  $('start').remove();
+  setInterval(tick, 40);
+  requestAnimationFrame(render);
+  buzz(canVibrate ? 200 : 180);                        // test du vibreur au démarrage
+};
+$('nom').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('go').click(); } });
+</script>
+</body>
+</html>

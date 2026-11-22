@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Installer les dépendances (environnement .venv)",
+      "type": "shell",
+      "command": "python3 -m venv .venv && .venv/bin/pip install -r requirements.txt",
+      "windows": { "command": "python -m venv .venv; .venv\\Scripts\\pip install -r requirements.txt" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Lancer SuperCollider seul (pour voir sa console)",
+      "type": "shell",
+      "command": "sclang sc/jokari.scd",
+      "osx": { "command": "/Applications/SuperCollider.app/Contents/MacOS/sclang sc/jokari.scd" },
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sonic Jokari</title>
+<style>
+  :root { --bg:#111418; --card:#1b2027; --line:#2c333d; --txt:#e8ecf1; --dim:#8d97a5; --acc:#4fd1c5; --warn:#f6ad55; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--txt); font-size:15px; }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); padding:12px 14px 8px; border-bottom:1px solid var(--line); }
+  h1 { margin:0 0 6px; font-size:18px; }
+  .status { font-size:14px; color:var(--dim); }
+  .status b { color:var(--txt); }
+  .score { font-size:26px; font-weight:700; letter-spacing:1px; margin:4px 0; }
+  main { padding:10px 14px 60px; max-width:720px; margin:auto; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }
+  button, select, input[type=text] { font:inherit; color:var(--txt); background:var(--card); border:1px solid var(--line); border-radius:8px; padding:9px 12px; }
+  button { cursor:pointer; }
+  button.acc { background:var(--acc); color:#08201e; border-color:var(--acc); font-weight:600; }
+  details { background:var(--card); border:1px solid var(--line); border-radius:10px; margin:10px 0; }
+  summary { padding:12px 14px; cursor:pointer; font-weight:600; }
+  .fields { padding:0 14px 12px; }
+  .f { display:grid; grid-template-columns: 1fr 64px; gap:2px 10px; align-items:center; margin:8px 0; }
+  .f label { grid-column: 1 / 3; font-size:13px; color:var(--dim); }
+  .f input[type=range] { width:100%; accent-color:var(--acc); }
+  .f .v { text-align:right; font-variant-numeric: tabular-nums; }
+  .f.full { grid-template-columns: 1fr; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#555; margin-right:4px; }
+  .dot.on { background:var(--acc); }
+  .err { color:var(--warn); font-size:13px; }
+  .small { font-size:12px; color:var(--dim); }
+  details.fam { background:none; border:none; margin:18px 0 6px; }
+  details.fam > summary { font-size:19px; padding:6px 2px; border-bottom:2px solid var(--line); list-style:none; }
+  details.fam > summary::-webkit-details-marker { display:none; }
+  details.fam > summary::after { content:'▾'; float:right; color:var(--dim); }
+  details.fam:not([open]) > summary::after { content:'▸'; }
+  details.fam > .famBody { padding-top:4px; }
+  .sub { font-size:13px; color:var(--dim); margin:10px 2px 2px; }
+  .players { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 14px; margin:10px 0; }
+  .players h2 { font-size:16px; margin:4px 0 6px; }
+  .pl { display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--line); }
+  .pl:first-of-type { border-top:none; }
+  .pl .n { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pl .j { font-weight:700; color:var(--acc); min-width:34px; }
+  .pl.off .n, .pl.off .j { color:var(--dim); }
+  .pl input { width:22px; height:22px; accent-color:var(--acc); }
+  .hit { display:grid; grid-template-columns: 110px 1fr 112px; gap:8px; align-items:center; padding:4px 0; font-size:14px; }
+  .hit .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hit .bar { height:12px; background:var(--line); border-radius:6px; overflow:hidden; }
+  .hit .bar i { display:block; height:100%; background:var(--acc); border-radius:6px; }
+  .hit.pf .bar i { background:#ffd34d; }
+  .hit .val { text-align:right; font-variant-numeric:tabular-nums; color:var(--dim); white-space:nowrap; }
+  .hit:first-of-type .nm, .hit:first-of-type .val { color:var(--txt); font-weight:700; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Sonic Jokari</h1>
+  <div class="status"><span id="snd" class="dot"></span>son · <span id="mode"></span> · <span id="manettes"></span></div>
+  <div class="score" id="score">–</div>
+  <div class="status" id="msg"></div>
+  <div class="small"><a id="raq" style="color:var(--acc)">📱 Prendre ce téléphone comme raquette</a>
+    · <a href="/qr" target="_blank" style="color:var(--acc)">QR codes à imprimer</a></div>
+</header>
+<script>document.getElementById('raq').href = 'https://' + location.hostname + ':8443/raquette';</script>
+<main>
+  <div class="row">
+    <button class="acc" onclick="act('nouvelle_partie')">Nouvelle partie</button>
+    <button onclick="act('trinquer')">Trinquer</button>
+    <button onclick="act('mode')">Changer de mode</button>
+    <button onclick="act('adversaire')">🤖 Adversaire virtuel</button>
+    <button onclick="act('musical')">🎵 Mode musical</button>
+    <button onclick="act('attente')">Mettre en attente</button>
+  </div>
+
+  <div class="players">
+    <h2>👥 Joueurs</h2>
+    <div id="plist"><div class="small">Aucune raquette pour l'instant.</div></div>
+    <div class="small" id="pbots"></div>
+  </div>
+
+  <div class="players">
+    <h2>💪 Frappes <span class="small">(la plus récente en haut)</span></h2>
+    <div id="hits"><div class="small">Pas encore de frappe.</div></div>
+  </div>
+
+  <div id="settings"></div>
+
+  <details class="fam" id="famOutils">
+    <summary>🧰 Outils</summary>
+    <div class="famBody">
+  <details>
+    <summary>Simulation (jouer sans manette)</summary>
+    <div class="fields">
+      <div class="f"><label>Force du coup</label><input type="range" id="simForce" min="0" max="1" step="0.05" value="0.7"
+        oninput="simV.textContent=this.value"><span class="v" id="simV">0.7</span></div>
+      <div class="row" id="simButtons"></div>
+      <div class="small">Mets « Joueurs virtuels » à 2 dans Jeu pour tester sans aucune manette.</div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Préréglages &amp; samples</summary>
+    <div class="fields">
+      <div class="row"><select id="presetSel"></select><button onclick="loadPreset()">Charger</button></div>
+      <div class="row"><input type="text" id="presetName" placeholder="nom du préréglage"><button onclick="savePreset()">Enregistrer</button></div>
+      <div class="row"><input type="file" id="upFile" accept=".wav,.aif,.aiff,.flac"><button onclick="upload()">Envoyer le sample</button></div>
+      <div class="small">Formats : wav, aif, flac. Le sample est lu en mono.</div>
+      <div class="err" id="err"></div>
+    </div>
+  </details>
+    </div>
+  </details>
+</main>
+<script>
+let CFG = null, SAMPLES = [], SORTIES = [], SORTIE = "", timers = {};
+const $ = id => document.getElementById(id);
+
+function get(path) { return path.split('.').reduce((o, k) => o[k], CFG); }
+async function api(url, body) {
+  const r = await fetch(url, body === undefined ? {} : { method: 'POST', body: typeof body === 'string' || body instanceof Blob ? body : JSON.stringify(body) });
+  const j = await r.json();
+  if (j.ok === false) { $('err').textContent = j.erreur; }
+  return j;
+}
+function send(path, value) {
+  clearTimeout(timers[path]);
+  timers[path] = setTimeout(() => api('/api/config', { [path]: value }), 120);
+}
+function act(a, extra) { return api('/api/action', Object.assign({ action: a }, extra || {})); }
+
+function field(section, f) {
+  const [key, label] = f, path = section + '.' + key, val = get(path);
+  const div = document.createElement('div'); div.className = 'f';
+  const lab = document.createElement('label'); lab.textContent = label; div.appendChild(lab);
+  if (f[2] === 'choix') {
+    div.classList.add('full');
+    const s = document.createElement('select');
+    f[3].forEach(([v, t]) => s.add(new Option(t, v, false, v === val)));
+    s.onchange = () => send(path, s.value); div.appendChild(s);
+  } else if (f[2] === 'bool') {
+    div.classList.add('full');
+    const c = document.createElement('input'); c.type = 'checkbox'; c.checked = val;
+    c.onchange = () => send(path, c.checked); div.appendChild(c);
+  } else if (f[2] === 'sortie') {
+    div.classList.add('full');
+    const s = document.createElement('select');
+    s.add(new Option('Sortie par défaut de l\'ordinateur (suit les changements)' + (SORTIE ? ' — ' + SORTIE : ''), ''));
+    SORTIES.forEach(n => s.add(new Option(n, n, false, n === val)));
+    if (val && !SORTIES.includes(val)) s.add(new Option(val + ' (absente)', val, false, true));
+    s.onchange = () => send(path, s.value); div.appendChild(s);
+  } else if (f[2] === 'texte') {
+    div.classList.add('full');
+    const t = document.createElement('input'); t.type = 'text'; t.value = val; t.autocomplete = 'off';
+    t.onchange = () => send(path, t.value); div.appendChild(t);
+  } else if (f[2] === 'sample') {
+    div.classList.add('full');
+    const s = document.createElement('select'); s.className = 'samplesel'; s.dataset.path = path;
+    fillSamples(s, val); s.onchange = () => send(path, s.value); div.appendChild(s);
+  } else {
+    const [, , min, max, step] = f;
+    const r = document.createElement('input'); r.type = 'range'; r.min = min; r.max = max; r.step = step; r.value = val;
+    const v = document.createElement('span'); v.className = 'v'; v.textContent = val;
+    r.oninput = () => { v.textContent = r.value; send(path, parseFloat(r.value)); };
+    div.appendChild(r); div.appendChild(v);
+  }
+  return div;
+}
+function fillSamples(s, val) {
+  s.innerHTML = ''; s.add(new Option('(synthé intégré)', ''));
+  SAMPLES.forEach(n => s.add(new Option(n, n, false, n === val)));
+}
+
+async function load() {
+  const j = await api('/api/config');
+  CFG = j.config; SAMPLES = j.samples; SORTIES = j.sorties || []; SORTIE = j.sortie_actuelle || '';
+  const root = $('settings'); root.innerHTML = '';
+  const block = ([title, section, fields]) => {
+    const d = document.createElement('details');
+    d.innerHTML = `<summary>${title.replace(/^Son : /, '')}</summary>`;
+    const box = document.createElement('div'); box.className = 'fields';
+    fields.forEach(f => box.appendChild(field(section, f)));
+    if (section.startsWith('sons.')) {
+      const b = document.createElement('button'); b.textContent = '▶ Écouter';
+      b.onclick = () => act('test:' + section.slice(5)); box.appendChild(b);
+    }
+    d.appendChild(box); return d;
+  };
+  const byTitle = {}; j.schema.forEach(sec => byTitle[sec[0]] = sec);
+  (j.familles || [['Réglages', j.schema.map(x => x[0])]]).forEach(([fam, titles], i) => {
+    const F = document.createElement('details'); F.className = 'fam'; F.dataset.fam = fam;
+    let open = i === 0;
+    try { const k = localStorage.getItem('fam:' + fam); if (k) open = k === '1'; } catch (e) {}
+    F.open = open;
+    F.innerHTML = `<summary>${fam}</summary>`;
+    F.addEventListener('toggle', () => { try { localStorage.setItem('fam:' + fam, F.open ? '1' : '0'); } catch (e) {} });
+    const body = document.createElement('div'); body.className = 'famBody';
+    titles.forEach(t => {
+      if (t === 'Son : *') {                 // tous les sons ponctuels (impact, mur, victoire…)
+        const sub = document.createElement('div'); sub.className = 'sub'; sub.textContent = 'Sons ponctuels (samples ou synthé)';
+        body.appendChild(sub);
+        j.schema.filter(x => x[0].startsWith('Son : ')).forEach(x => body.appendChild(block(x)));
+      } else if (byTitle[t]) body.appendChild(block(byTitle[t]));
+    });
+    F.appendChild(body); root.appendChild(F);
+  });
+  const ps = $('presetSel'); ps.innerHTML = '';
+  j.presets.forEach(p => ps.add(new Option(p, p)));
+}
+async function savePreset() { await act('preset_save', { nom: $('presetName').value }); load(); }
+async function loadPreset() { await act('preset_load', { nom: $('presetSel').value }); load(); }
+async function upload() {
+  const f = $('upFile').files[0]; if (!f) return;
+  const j = await api('/api/upload?nom=' + encodeURIComponent(f.name), f);
+  if (j.samples) { SAMPLES = j.samples; document.querySelectorAll('.samplesel').forEach(s => fillSamples(s, get(s.dataset.path))); $('err').textContent = 'Sample envoyé : ' + f.name; }
+}
+
+let lastN = -1, lastPl = '', lastHits = '';
+function renderHits(list) {
+  const key = JSON.stringify(list);
+  if (key === lastHits) return;
+  lastHits = key;
+  const box = $('hits'); box.innerHTML = '';
+  if (!list.length) { box.innerHTML = '<div class="small">Pas encore de frappe.</div>'; return; }
+  list.slice().reverse().forEach(h => {
+    const row = document.createElement('div'); row.className = 'hit' + (h.parfait ? ' pf' : '');
+    const pct = Math.round(h.force * 100);
+    row.innerHTML = `<span class="nm">${(h.parfait ? '✨ ' : h.service ? '🎾 ' : '') + h.nom.replace(/</g, '&lt;')}</span>`
+      + `<span class="bar"><i style="width:${Math.max(pct, 2)}%"></i></span>`
+      + `<span class="val">${pct} %${h.pic ? ' · ' + h.pic.toFixed(1) + ' g' : ''}</span>`;
+    box.appendChild(row);
+  });
+}
+function renderPlayers(list, s) {
+  const key = JSON.stringify(list) + s.adversaires;
+  if (key === lastPl) return;
+  lastPl = key;
+  const box = $('plist'); box.innerHTML = '';
+  if (!list.length) box.innerHTML = '<div class="small">Aucune raquette pour l\'instant.</div>';
+  list.forEach(p => {
+    const row = document.createElement('label');
+    row.className = 'pl' + (p.actif && p.en_ligne ? '' : ' off');
+    const who = p.nom || (p.type === 'Wiimote' ? 'Wiimote' : 'Téléphone sans prénom');
+    const st = !p.actif ? 'désactivé' : !p.en_ligne ? 'hors ligne' : p.type;
+    row.innerHTML = `<span class="j">${p.joueur ? 'J' + p.joueur : '–'}</span>`
+      + `<span class="n">${who.replace(/</g, '&lt;')} <span class="small">· ${st}</span></span>`;
+    const c = document.createElement('input'); c.type = 'checkbox'; c.checked = p.actif;
+    c.title = 'Joueur actif';
+    c.onchange = () => act('raquette', { id: p.id, actif: c.checked });
+    row.appendChild(c); box.appendChild(row);
+  });
+  $('pbots').textContent = s.adversaires && s.adversaires.length
+    ? '🤖 Adversaire virtuel : joueur ' + s.adversaires.join(', ') + ' (bouton « Adversaire virtuel » pour l\'enlever)' : '';
+}
+async function poll() {
+  try {
+    const s = await (await fetch('/api/state')).json();
+    $('snd').className = 'dot' + (s.son_pret ? ' on' : '');
+    $('mode').innerHTML = '<b>' + (s.mode === 'pelote' ? 'Pelote' : 'Jokari') + '</b>';
+    $('manettes').textContent = s.manettes.length ? 'manettes : ' + s.manettes.join(', ') : 'aucune manette';
+    $('score').textContent = s.joueurs > 1 ? s.points.join(' – ') : `Série ${s.serie} · record ${s.record}`;
+    $('msg').textContent = s.message + (s.etat === 'vol' ? ` · ${s.distance} m` : '');
+    renderPlayers(s.raquettes || [], s);
+    renderHits(s.frappes || []);
+    if (s.joueurs !== lastN) {
+      lastN = s.joueurs; const box = $('simButtons'); box.innerHTML = '';
+      for (let i = 1; i <= s.joueurs; i++) {
+        const b = document.createElement('button'); b.textContent = 'Frapper J' + i;
+        b.onclick = () => act('coup', { joueur: i, force: parseFloat($('simForce').value) });
+        box.appendChild(b);
+      }
+    }
+  } catch (e) {}
+  setTimeout(poll, 300);
+}
+load(); poll();
+</script>
+</body>
+</html>

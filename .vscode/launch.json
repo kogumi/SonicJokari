@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Jokari — manettes",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/jokari.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Jokari — simulation (2 joueurs virtuels)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/jokari.py",
+      "args": ["--sim"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Jokari — simulation sans lancer SuperCollider",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/jokari.py",
+      "args": ["--sim", "--no-sc"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    }
+  ]
+}
