@@ -155,7 +155,9 @@ Les réglages les plus utiles :
 
 On peut **enregistrer un préréglage** (en bas de la page) et le recharger plus tard.
 
-Pour **régler le son à l'oreille** : mets 2 adversaires virtuels et aucune raquette, ils jouent tout seuls.
+Pour **régler le son à l'oreille** : en haut de la famille 🔊 Son, la boîte **🎧 Tester les sons** fait entendre
+un vol de balle complet, le riser, la frappe de chaque joueur, la frappe parfaite ou la voix, à la force et au
+niveau de combo choisis (sans compter de point). Ou mets 2 adversaires virtuels et aucune raquette : ils jouent tout seuls.
 
 ---
 

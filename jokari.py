@@ -535,6 +535,7 @@ class Game:
         self.flight_t = 0.0
         self.last_force = (0, 0, 0.0, 0.0)    # (compteur, joueur, force, pic en g) de la dernière frappe
         self.hits = []                        # dernières frappes (page de réglages)
+        self.demo = None                      # vol de balle de test (page de réglages)
         self.order = []
         self.energy = 0.5
         self.players_key = None
@@ -736,6 +737,8 @@ class Game:
                 self.virtual_motion[slot % 8] = max(self.virtual_motion[slot % 8], 0.5 + value * 2.5)
             if slot >= self.n:
                 return
+            if self.demo:                       # vol de test en cours : on ne joue pas
+                return
             if self.state == "service" and slot == self.server:
                 self.launch(slot, value, serve=True)
             elif self.state == "vol" and slot == self.receiver and self.v < 0 \
@@ -760,6 +763,8 @@ class Game:
                 self.new_game()
             elif value in ("plus", "moins"):
                 self.set_mode("pelote" if self.cfg["jeu"]["mode"] == "jokari" else "jokari")
+        elif kind == "test":
+            self.test_sound(value)
         elif kind == "action":
             name = value
             if name == "nouvelle_partie":
@@ -827,10 +832,40 @@ class Game:
                 self.ev("service", pan=self.pan(self.server))
             self.send_sound()
 
+    def test_sound(self, b):
+        """Écouter un son depuis la page de réglages, à la force et au niveau de combo voulus."""
+        t = b.get("action", "")
+        f = clamp(float(b.get("force", 0.6)), 0, 1)
+        L = clamp(float(b.get("combo", 0)), 0, 1)
+        fc = f ** self.cfg["physique"]["courbe_force"]
+        j = max(int(b.get("joueur", 1)) - 1, 0)
+        if t == "test_frappe":
+            self.ev("impact", pan=self.pan(j) if j < self.n else 0.0, force=fc, player=j)
+        elif t == "test_parfait":
+            self.ev("parfait", pan=0.0, force=1.0)
+            self.ev("impact", pan=0.0, force=fc, player=j)
+        elif t == "test_riser":
+            self.ev("riser", pan=0.0, force=max(L, 0.3), gain=0.25 + 0.75 * max(L, 0.3), dur=2.0)
+        elif t == "test_voix":
+            self.sound.say(f"Point pour {self.name(0)}")
+        elif t == "test_vol" and self.state in ("attente", "fin", "service") and not self.demo:
+            # un vrai vol de balle (aller, élastique ou mur, retour), sans marquer de point
+            self.demo = (self.state, self.message, self.combo)
+            self.launch(0, f, serve=True)
+            self.combo = L * max(self.cfg["combo"]["echanges_max"], 1)
+            self.message = f"Test : vol de balle (force {round(f * 100)} %, combo {round(L * 100)} %)"
+
+    def end_demo(self):
+        st, msg, combo = self.demo
+        self.demo = None
+        self.d = self.v = 0.0
+        self.state, self.message, self.combo = st, msg, combo
+        self.last_cue = time.monotonic()
+
     def bots(self, now):
         """Adversaires virtuels : servent après un temps de réflexion, renvoient à un moment
         aléatoire dans la fenêtre de frappe, et ratent parfois selon leur niveau."""
-        if not self.bot_slots:
+        if not self.bot_slots or self.demo:
             self.bot_plan = None
             return
         lvl = clamp(self.cfg["jeu"]["niveau_adversaire"], 0, 1)
@@ -908,7 +943,10 @@ class Game:
             if self.v > 0:
                 self.v -= (P["frottement"] * self.v + P["frein"]) * dt
                 if self.v <= 0.2:
-                    self.fault(self.hitter, "balle courte")
+                    if self.demo:
+                        self.end_demo()
+                    else:
+                        self.fault(self.hitter, "balle courte")
                     return
             else:
                 self.v *= (1 - P["frottement"] * dt)
@@ -938,7 +976,10 @@ class Game:
             if self.cfg["manette"]["vibreur_approche"]:
                 self.mgr.rumble(self.receiver, 40)
         if self.v < 0 and self.d <= -P["retard_max"] * abs(self.v):   # délai de grâce dépassé
-            self.fault(self.receiver, "raté")
+            if self.demo:                                              # vol de test : fini, sans point
+                self.end_demo()
+            else:
+                self.fault(self.receiver, "raté")
 
     def ball_params(self):
         b, P = self.cfg["balle"], self.cfg["physique"]
@@ -1225,6 +1266,8 @@ def make_handler(app):
                                 app.cfg[k] = new[k]
                             save_config(app.cfg)
                         app.sound.push_all()
+                    elif act.startswith("test_"):      # tests de sons depuis la page de réglages
+                        app.game.post("test", 0, body)
                     else:
                         app.game.post("action", 0, act)
                     self._json({"ok": True})
