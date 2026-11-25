@@ -5,3 +5,4 @@ certs/
 qr/
 samples/kits/
 .DS_Store
+.pio/

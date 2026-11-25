@@ -73,6 +73,17 @@ Un seul onglet raquette par téléphone (sinon le téléphone compte pour deux j
 Sur la page de réglages, la carte **👥 Joueurs** liste les raquettes : décoche un joueur pour le retirer de la partie
 (un onglet en trop, quelqu'un qui fait une pause), recoche-le pour le faire revenir.
 
+### Sans box : la borne Wi-Fi ESP32
+
+Un ESP32-S3 (dossier `esp32-wifi/`) crée le réseau **SonicJokari** (mot de passe `sonicjokari`), sans internet :
+1. Branche l'ESP32 (USB ou n'importe quel chargeur) : le réseau apparaît en quelques secondes.
+2. Connecte **l'ordinateur** et **les téléphones** au Wi-Fi « SonicJokari ».
+3. Lance le jeu : le QR code de la raquette prend tout seul la nouvelle adresse (192.168.4.x).
+4. Pour le QR code Wi-Fi : dans les réglages, section Réseau, mets « SonicJokari » / « sonicjokari ».
+
+Jusqu'à 10 appareils. Pour changer le nom ou le mot de passe : `esp32-wifi/src/main.cpp`, puis
+`~/.platformio/penv/bin/pio run -t upload` dans le dossier `esp32-wifi`.
+
 ### Avec des Wiimotes
 
 - **Raspberry Pi / Linux** : lance `./raspberry-pi/appairer.sh` et appuie sur le bouton rouge SYNC de chaque manette.
