@@ -125,7 +125,7 @@ DEFAULTS = {
                    "hauteur": [[0, 0], [1, 0]], "reverb": [[0, 0], [1, 0]]},
     "dubstep": {"wobble": 0.0},      # 0 : le wobble masquait la sensation de distance et de vitesse
     "musical": {"actif": False, "bpm": 140.0, "volume": 0.6},
-    "reseau": {"wifi_nom": "", "wifi_mdp": "", "wifi_securite": "WPA", "adresse": ""},
+    "reseau": {"wifi_nom": "SonicJokari", "wifi_mdp": "sonicjokari", "wifi_securite": "WPA", "adresse": ""},   # borne ESP32
 }
 
 # Description des réglages pour la page web : (clé, libellé, min, max, pas)
