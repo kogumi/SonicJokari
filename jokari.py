@@ -516,7 +516,7 @@ class Game:
         self.q = queue.Queue()
         self.n = 0
         self.points = []
-        self.virtual_motion = [0.0] * 8
+        self.virtual_motion = [0.0] * 64     # jusqu'à 64 joueurs
         self.state = "attente" if cfg["jeu"]["trinquer_pour_lancer"] else "service"
         self.server = 0
         self.hitter = self.receiver = 0
@@ -595,7 +595,8 @@ class Game:
             if self.n == 2:
                 txt = f"{order[0]} contre {order[1]}. {order[0]} commence."
             else:
-                txt = "Ordre de jeu : " + ", puis ".join(order) + f". {order[0]} commence."
+                txt = ("Ordre de jeu : " + ", puis ".join(order) + f". {order[0]} commence." if self.n <= 6
+                       else f"{self.n} joueurs. {order[0]} commence.")   # 24 prénoms : trop long à dire
             self.later(0.4, lambda: self.sound.say(txt))
             if self.server in self.bot_slots:      # le bot attend la fin de l'annonce pour servir
                 self.bot_plan = ("service", time.monotonic() + 2.0 + 0.9 * self.n + random.uniform(0, 1.0))

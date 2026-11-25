@@ -58,7 +58,9 @@
   /* vue « score » : rien que le score, sans aucun effet */
   #scoreview { position:fixed; inset:0; z-index:8; background:var(--bg); display:none; flex-direction:column;
                padding:max(14px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); gap:14px; }
-  #scoreview .rows { flex:1; display:flex; flex-direction:column; justify-content:center; gap:14px; }
+  #scoreview .rows { flex:1; display:flex; flex-direction:column; justify-content:center; gap:14px; overflow-y:auto; }
+  #scoreview .rows.many { justify-content:flex-start; gap:4px; }
+  #scoreview .rows.many .pr { font-size:18px; padding-bottom:4px; } #scoreview .rows.many .pr b { font-size:24px; }
   #scoreview .pr { display:flex; justify-content:space-between; align-items:baseline; font-size:28px; font-weight:700;
                    border-bottom:1px solid var(--line); padding-bottom:10px; }
   #scoreview .pr b { font-size:46px; }
@@ -400,6 +402,7 @@ async function tick() {
     const pts = j.points || [], noms = j.noms || [];
     $('lscore').innerHTML = pts.length > 1 ? pts.join(' – ') + (j.combo >= 2 ? ' <span style="color:var(--gold)">×' + j.combo + '</span>' : '')
       + '<small>' + noms.map(n => n.replace(/</g, '&lt;')).join(' · ') + '</small>' : '';
+    $('srows').classList.toggle('many', pts.length > 6);
     $('srows').innerHTML = pts.map((p, i) => `<div class="pr${i + 1 === j.joueur ? ' me' : ''}"><span>${(noms[i] || 'Joueur ' + (i + 1)).replace(/</g, '&lt;')}</span><b>${p}</b></div>`).join('');
     $('smsg').textContent = j.message || '';
     $('sscombo').textContent = j.combo >= 2 ? 'Combo ×' + j.combo : '';
@@ -469,7 +472,13 @@ $('go').onclick = async () => {
   // téléphone, l'iPhone propose « Annuler la saisie » en pleine partie
   $('nom').blur();
   $('start').remove();
-  setInterval(tick, 40);
+  // envoi rapide (25 /s) seulement quand c'est à moi de jouer, sinon 6 /s :
+  // à 24 téléphones, ça divise par 3 à 4 la charge de l'ordinateur (le sabre, lui, reste local)
+  (function loop() {
+    // (trinquer n'a pas besoin de vitesse : les chocs sont datés avec l'horloge du téléphone, recalée)
+    const urgent = (G.etat === 'service' && G.srv === G.me) || (G.etat === 'vol' && G.recv === G.me && G.v < 0);
+    tick(); setTimeout(loop, urgent ? 40 : 160);
+  })();
   requestAnimationFrame(render);
   buzz(canVibrate ? 200 : 180);                        // test du vibreur au démarrage
 };
