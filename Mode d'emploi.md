@@ -78,7 +78,9 @@ Sur la page de réglages, la carte **👥 Joueurs** liste les raquettes : décoc
 Un ESP32-S3 (dossier `esp32-wifi/`) crée le réseau **SonicJokari** (mot de passe `sonicjokari`), sans internet :
 1. Branche l'ESP32 (USB ou n'importe quel chargeur) : le réseau apparaît en quelques secondes.
 2. Connecte **l'ordinateur** et **les téléphones** au Wi-Fi « SonicJokari ».
-3. Lance le jeu : le QR code de la raquette prend tout seul la nouvelle adresse (192.168.4.x).
+3. Lance le jeu. Le QR code de la raquette devient **http://192.168.4.1**, une adresse qui ne change jamais :
+   la borne renvoie le téléphone vers le jeu, quelle que soit l'adresse de l'ordinateur. Imprime-le une fois pour toutes.
+   (http://192.168.4.1/reglages ouvre la page de réglages.)
 4. Pour le QR code Wi-Fi : dans les réglages, section Réseau, mets « SonicJokari » / « sonicjokari ».
 
 Jusqu'à 10 appareils (limite de l'ESP32), donc **jusqu'à 9 téléphones + l'ordinateur** ; ajoute des adversaires virtuels

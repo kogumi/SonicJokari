@@ -1150,11 +1150,29 @@ def set_path(cfg, path, value):
     ref[k] = value
 
 
+BORNE = "192.168.4.1"          # borne Wi-Fi ESP32 (esp32-wifi/)
+
+
+def announce_to_hub():
+    """Sur le réseau de la borne ESP32, le jeu s'y signale toutes les 2 s : la borne renvoie
+    alors http://192.168.4.1 vers la page raquette, quelle que soit l'adresse de l'ordinateur."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    while True:
+        if local_ip().startswith(BORNE[:-1]):
+            try:
+                sock.sendto(b"SONICJOKARI", (BORNE, 4210))
+            except OSError:
+                pass
+        time.sleep(2)
+
+
 def qr_targets(app):
     """Adresse fixe de la raquette + texte du QR code Wi-Fi (vide si le Wi-Fi n'est pas renseigné)."""
     R = app.cfg["reseau"]
     host = R["adresse"].strip() or app.ip          # adresse IP (le nom .local ne marche pas partout)
     url = f"https://{host}:{app.https_port}/raquette"
+    if not R["adresse"].strip() and app.ip.startswith(BORNE[:-1]):
+        url = f"http://{BORNE}/"                    # borne ESP32 : adresse fixe, elle renvoie vers le jeu
     wifi = qr.wifi_text(R["wifi_nom"], R["wifi_mdp"], R["wifi_securite"]) if R["wifi_nom"].strip() else ""
     return url, wifi
 
@@ -1553,6 +1571,7 @@ def main():
         print("[wiimote] aucun pilote Wiimote (installe evdev sur Linux, hidapi sur Mac/Windows) : "
               "téléphones et simulation seulement")
 
+    threading.Thread(target=announce_to_hub, daemon=True).start()
     app.engine = Engine(app.cfg, app.sound)
     if not args.no_sc:
         app.engine.start()
