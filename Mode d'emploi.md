@@ -81,7 +81,8 @@ Un ESP32-S3 (dossier `esp32-wifi/`) crée le réseau **SonicJokari** (mot de pas
 3. Lance le jeu : le QR code de la raquette prend tout seul la nouvelle adresse (192.168.4.x).
 4. Pour le QR code Wi-Fi : dans les réglages, section Réseau, mets « SonicJokari » / « sonicjokari ».
 
-Jusqu'à 10 appareils (limite de l'ESP32) : **au-delà, pour jouer jusqu'à 24, prends un vrai routeur Wi-Fi**
+Jusqu'à 10 appareils (limite de l'ESP32), donc **jusqu'à 9 téléphones + l'ordinateur** ; ajoute des adversaires virtuels
+pour atteindre 10 joueurs et plus : **au-delà, pour jouer jusqu'à 24, prends un vrai routeur Wi-Fi**
 (même un vieux modèle) ou ta box. Pour changer le nom ou le mot de passe : `esp32-wifi/src/main.cpp`, puis
 `~/.platformio/penv/bin/pio run -t upload` dans le dossier `esp32-wifi`.
 
