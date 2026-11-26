@@ -34,7 +34,8 @@ const IPAddress ICI(192, 168, 4, 1);
 struct Question { uint16_t id; IPAddress ip; uint16_t port; };
 Question enCours[16];                   // questions DNS relayées en attente de réponse
 uint8_t nQ = 0;
-bool sansBox = false;                   // box introuvable au démarrage : on arrête de la chercher
+bool sansBox = false;
+#define AVEC_BOX (strlen(BOX_NOM) && strlen(BOX_MDP))   // sans mot de passe : borne seule, comme au début                   // box introuvable au démarrage : on arrête de la chercher
 IPAddress jeu;                          // adresse de l'ordinateur du jeu
 uint32_t vuLe = 0;
 
@@ -98,11 +99,13 @@ void setup() {
     if (e == ARDUINO_EVENT_WIFI_STA_GOT_IP) WiFi.AP.enableNAPT(true);
     if (e == ARDUINO_EVENT_WIFI_STA_LOST_IP || e == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) WiFi.AP.enableNAPT(false);
   });
-  WiFi.mode(strlen(BOX_NOM) ? WIFI_AP_STA : WIFI_AP);
+  // ordre de l'exemple officiel (WiFiExtender) : démarrer le point d'accès, le configurer, puis le créer
+  WiFi.AP.begin();
   WiFi.AP.config(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0),
                  IPAddress(192, 168, 4, 2), ICI);   // la borne est le DNS des téléphones
-  WiFi.softAP(NOM, MDP, CANAL, false, CLIENTS_MAX);
-  if (strlen(BOX_NOM)) {
+  WiFi.AP.create(NOM, MDP, CANAL, 0, CLIENTS_MAX);
+  if (!WiFi.AP.waitStatusBits(ESP_NETIF_STARTED_BIT, 2000)) Serial.println("[wifi] ERREUR : point d'acces non demarre");
+  if (AVEC_BOX) {
     WiFi.setAutoReconnect(true);
     WiFi.begin(BOX_NOM, BOX_MDP);          // la borne prend alors le canal de la box
   }
@@ -131,11 +134,10 @@ void loop() {
   relaieDns();
   // chercher la box fait changer la borne de canal (les téléphones décrochent) : on n'essaie
   // que 15 s au démarrage ; ensuite la borne reste autonome jusqu'au prochain redémarrage
-  if (strlen(BOX_NOM) && !sansBox && !WiFi.isConnected() && millis() > 15000) {
+  if (AVEC_BOX && !sansBox && !WiFi.isConnected() && millis() > 15000) {
     sansBox = true;
     WiFi.setAutoReconnect(false);
-    WiFi.disconnect();
-    WiFi.mode(WIFI_AP);
+    WiFi.disconnect();                    // sans changer de mode : le point d'accès reste allumé
   }
   if (udp.parsePacket()) {
     char buf[16] = {0};
@@ -145,9 +147,10 @@ void loop() {
   static uint32_t t = 0;
   if (millis() - t > 5000) {            // état toutes les 5 s sur le port série
     t = millis();
+    Serial.printf("[wifi] emet « %s » canal %d - ", WiFi.softAPSSID().c_str(), WiFi.channel());
     Serial.printf("[wifi] %s %s - %d appareil(s) - jeu : %s - internet : %s\n", NOM, WiFi.softAPIP().toString().c_str(),
                   WiFi.softAPgetStationNum(), jeuPresent() ? jeu.toString().c_str() : "absent",
-                  !strlen(BOX_NOM) ? "non (box.h vide)" : WiFi.isConnected() ? "oui, via la box"
+                  !AVEC_BOX ? "non (box.h incomplet)" : WiFi.isConnected() ? "oui, via la box"
                   : sansBox ? "non (box introuvable au demarrage)" : "recherche de la box...");
   }
   delay(2);
