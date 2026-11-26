@@ -1171,7 +1171,7 @@ def qr_targets(app):
     R = app.cfg["reseau"]
     host = R["adresse"].strip() or app.ip          # adresse IP (le nom .local ne marche pas partout)
     url = f"https://{host}:{app.https_port}/raquette"
-    if not R["adresse"].strip() and app.ip.startswith(BORNE[:-1]):
+    if not R["adresse"].strip() and (app.ip.startswith(BORNE[:-1]) or R["wifi_nom"] == "SonicJokari"):
         url = f"http://{BORNE}/"                    # borne ESP32 : adresse fixe, elle renvoie vers le jeu
     wifi = qr.wifi_text(R["wifi_nom"], R["wifi_mdp"], R["wifi_securite"]) if R["wifi_nom"].strip() else ""
     return url, wifi
