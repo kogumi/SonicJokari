@@ -6,4 +6,3 @@ qr/
 samples/kits/
 .DS_Store
 .pio/
-esp32-wifi/src/box.h

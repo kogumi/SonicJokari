@@ -75,9 +75,6 @@ Sur la page de réglages, la carte **👥 Joueurs** liste les raquettes : décoc
 
 ### Sans box : la borne Wi-Fi ESP32
 
-**Avec internet à la maison** : copie `esp32-wifi/src/box.example.h` en `box.h`, mets-y le nom du Wi-Fi **2,4 GHz**
-de ta box et son mot de passe, puis reflashe la borne. SonicJokari partage alors internet quand la box est là.
-
 Un ESP32-S3 (dossier `esp32-wifi/`) crée le réseau **SonicJokari** (mot de passe `sonicjokari`), sans internet :
 1. Branche l'ESP32 (USB ou n'importe quel chargeur) : le réseau apparaît en quelques secondes.
 2. Connecte **l'ordinateur** et **les téléphones** au Wi-Fi « SonicJokari ».
