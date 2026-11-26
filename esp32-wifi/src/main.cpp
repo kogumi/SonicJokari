@@ -34,6 +34,7 @@ const IPAddress ICI(192, 168, 4, 1);
 struct Question { uint16_t id; IPAddress ip; uint16_t port; };
 Question enCours[16];                   // questions DNS relayées en attente de réponse
 uint8_t nQ = 0;
+bool sansBox = false;                   // box introuvable au démarrage : on arrête de la chercher
 IPAddress jeu;                          // adresse de l'ordinateur du jeu
 uint32_t vuLe = 0;
 
@@ -128,6 +129,14 @@ void loop() {
   web.handleClient();
   repondDns();
   relaieDns();
+  // chercher la box fait changer la borne de canal (les téléphones décrochent) : on n'essaie
+  // que 15 s au démarrage ; ensuite la borne reste autonome jusqu'au prochain redémarrage
+  if (strlen(BOX_NOM) && !sansBox && !WiFi.isConnected() && millis() > 15000) {
+    sansBox = true;
+    WiFi.setAutoReconnect(false);
+    WiFi.disconnect();
+    WiFi.mode(WIFI_AP);
+  }
   if (udp.parsePacket()) {
     char buf[16] = {0};
     udp.read(buf, sizeof(buf) - 1);
@@ -138,7 +147,8 @@ void loop() {
     t = millis();
     Serial.printf("[wifi] %s %s - %d appareil(s) - jeu : %s - internet : %s\n", NOM, WiFi.softAPIP().toString().c_str(),
                   WiFi.softAPgetStationNum(), jeuPresent() ? jeu.toString().c_str() : "absent",
-                  !strlen(BOX_NOM) ? "non (box.h vide)" : WiFi.isConnected() ? "oui, via la box" : "box introuvable");
+                  !strlen(BOX_NOM) ? "non (box.h vide)" : WiFi.isConnected() ? "oui, via la box"
+                  : sansBox ? "non (box introuvable au demarrage)" : "recherche de la box...");
   }
   delay(2);
 }
